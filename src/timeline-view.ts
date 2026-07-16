@@ -65,6 +65,7 @@ interface TimelineItem {
 	title: string;
 	start: number | null;
 	end: number | null;
+	scheduled: boolean;
 	priority: PriorityLevel;
 	priorityLabel: string | null;
 }
@@ -72,7 +73,6 @@ interface TimelineItem {
 interface RenderGroup {
 	label: string | null;
 	items: TimelineItem[];
-	unscheduled: TimelineItem[];
 }
 
 interface DragState {
@@ -198,8 +198,6 @@ export class TimelineView extends BasesView implements HoverParent {
 	private sidebarEl: HTMLElement;
 	private sidebarBodyEl: HTMLElement;
 	private scrollerEl: HTMLElement;
-	private unscheduledEl: HTMLElement;
-	private sidebarBtn: HTMLElement;
 
 	private minDay = 0;
 	private pxPerDay = ZOOMS.month.pxPerDay;
@@ -220,22 +218,26 @@ export class TimelineView extends BasesView implements HoverParent {
 		const main = this.rootEl.createDiv("ptl-main");
 
 		this.sidebarEl = main.createDiv("ptl-sidebar");
-		this.sidebarEl.createDiv("ptl-sidebar-header");
+		const sideHeader = this.sidebarEl.createDiv("ptl-sidebar-header");
+		const todayBtn = sideHeader.createEl("button", { text: "Oggi", cls: "ptl-btn ptl-today-btn" });
+		this.registerDomEvent(todayBtn, "click", () => this.scrollToToday());
+		sideHeader.createDiv("ptl-spacer");
+		const collapseBtn = sideHeader.createEl("button", { cls: "ptl-icon-btn ptl-collapse-btn" });
+		setIcon(collapseBtn, "lucide-chevrons-left");
+		collapseBtn.setAttr("aria-label", "Nascondi pannello laterale");
+		this.registerDomEvent(collapseBtn, "click", () => this.toggleSidebar());
 		this.sidebarBodyEl = this.sidebarEl.createDiv("ptl-sidebar-body");
 
 		this.scrollerEl = main.createDiv("ptl-scroller");
-		this.unscheduledEl = this.rootEl.createDiv("ptl-unscheduled");
 
-		const controls = this.rootEl.createDiv("ptl-controls");
-		this.sidebarBtn = controls.createEl("button", { cls: "ptl-btn ptl-sidebar-btn" });
-		setIcon(this.sidebarBtn, "lucide-panel-left");
-		this.sidebarBtn.setAttr("aria-label", "Mostra/nascondi pannello laterale");
-		this.registerDomEvent(this.sidebarBtn, "click", () => {
-			this.config.set("sidebar", !this.sidebarVisible());
-			this.render();
-		});
-		const todayBtn = controls.createEl("button", { text: "Oggi", cls: "ptl-btn ptl-today-btn" });
-		this.registerDomEvent(todayBtn, "click", () => this.scrollToToday());
+		// Floating controls shown when the sidebar is collapsed.
+		const expand = this.rootEl.createDiv("ptl-expand-controls");
+		const expandBtn = expand.createEl("button", { cls: "ptl-icon-btn mod-floating" });
+		setIcon(expandBtn, "lucide-chevrons-right");
+		expandBtn.setAttr("aria-label", "Mostra pannello laterale");
+		this.registerDomEvent(expandBtn, "click", () => this.toggleSidebar());
+		const todayBtn2 = expand.createEl("button", { text: "Oggi", cls: "ptl-btn" });
+		this.registerDomEvent(todayBtn2, "click", () => this.scrollToToday());
 
 		this.registerDomEvent(this.scrollerEl, "scroll", () => {
 			if (this.drag) return;
@@ -268,6 +270,11 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private sidebarVisible(): boolean {
 		return (this.config.get("sidebar") as boolean) ?? true;
+	}
+
+	private toggleSidebar(): void {
+		this.config.set("sidebar", !this.sidebarVisible());
+		this.render();
 	}
 
 	private collapsedGroups(): string[] {
@@ -306,38 +313,40 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.endPid = this.config.getAsPropertyId("end") ?? "note.end";
 		const priorityPid = this.config.getAsPropertyId("priority") ?? "note.priority";
 		const sortByPriority = (this.config.get("sortByPriority") as boolean) ?? true;
+		const showUnscheduled = (this.config.get("showUnscheduled") as boolean) ?? true;
 
 		const groups: RenderGroup[] = [];
 		for (const group of this.data.groupedData) {
 			const rg: RenderGroup = {
 				label: group.hasKey() ? group.key?.toString() ?? null : null,
 				items: [],
-				unscheduled: [],
 			};
 			for (const entry of group.entries) {
 				let start = this.readDay(entry, this.startPid);
 				let end = this.readDay(entry, this.endPid);
 				if (start !== null && end !== null && end < start) [start, end] = [end, start];
+				const scheduled = start !== null || end !== null;
+				if (!scheduled && !showUnscheduled) continue;
 				const [priority, priorityLabel] = this.readPriority(entry, priorityPid);
-				const item: TimelineItem = {
+				rg.items.push({
 					entry,
 					file: entry.file,
 					title: entry.file.basename,
 					start,
 					end,
+					scheduled,
 					priority,
 					priorityLabel,
-				};
-				if (start === null && end === null) rg.unscheduled.push(item);
-				else rg.items.push(item);
+				});
 			}
 			if (sortByPriority) {
-				const byPriority = (a: TimelineItem, b: TimelineItem) =>
-					PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority];
-				rg.items.sort(byPriority);
-				rg.unscheduled.sort(byPriority);
+				rg.items.sort(
+					(a, b) =>
+						Number(b.scheduled) - Number(a.scheduled) ||
+						PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+				);
 			}
-			if (rg.items.length || rg.unscheduled.length) groups.push(rg);
+			if (rg.items.length) groups.push(rg);
 		}
 
 		// Order groups by workflow status when the labels match known statuses.
@@ -421,6 +430,9 @@ export class TimelineView extends BasesView implements HoverParent {
 			}
 			if (showGroups && isCollapsed) continue;
 			for (const item of g.items) {
+				// With the sidebar hidden there is nothing to align with:
+				// drop the unscheduled spacer rows entirely.
+				if (!item.scheduled && !sidebarVisible) continue;
 				anyRow = true;
 				this.renderSideRow(item);
 				this.renderRow(body, item);
@@ -428,10 +440,9 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 		if (!anyRow) {
 			const empty = body.createDiv("ptl-empty");
-			empty.createSpan({ text: "Nessun progetto con date da mostrare" });
+			empty.createSpan({ text: "Nessun progetto da mostrare" });
 		}
 
-		this.renderUnscheduled(groups);
 		this.restoreScroll();
 	}
 
@@ -459,10 +470,13 @@ export class TimelineView extends BasesView implements HoverParent {
 			}
 			const from = Math.max(blockStart, minDay);
 			const to = Math.min(next - 1, maxDay);
+			const blockWidth = (to - from + 1) * this.pxPerDay;
 			const el = monthsRow.createDiv("ptl-month");
 			el.style.left = `${(from - minDay) * this.pxPerDay}px`;
-			el.style.width = `${(to - from + 1) * this.pxPerDay}px`;
-			el.createSpan({ cls: "ptl-month-label", text: label });
+			el.style.width = `${blockWidth}px`;
+			// Partial blocks at the range edges can be narrower than the label:
+			// skip the label to avoid overlapping the next block's.
+			if (blockWidth >= 90) el.createSpan({ cls: "ptl-month-label", text: label });
 			d = next;
 		}
 
@@ -536,9 +550,6 @@ export class TimelineView extends BasesView implements HoverParent {
 	private renderSideRow(item: TimelineItem): void {
 		const row = this.sidebarBodyEl.createDiv("ptl-side-row");
 		row.createSpan({ cls: "ptl-side-title", text: item.title });
-		if (item.priorityLabel) {
-			row.createSpan({ cls: `ptl-pill mod-${item.priority}`, text: item.priorityLabel });
-		}
 		this.registerDomEvent(row, "click", (e) => this.openFile(e, item.file));
 		this.registerDomEvent(row, "mouseover", (e) => {
 			this.app.workspace.trigger("hover-link", {
@@ -553,6 +564,9 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private renderRow(body: HTMLElement, item: TimelineItem): void {
 		const row = body.createDiv("ptl-row");
+		// Unscheduled projects are listed in the sidebar only: keep the
+		// timeline row as an empty spacer so the two panes stay aligned.
+		if (!item.scheduled) return;
 		const start = item.start ?? item.end!;
 		const end = item.end ?? item.start!;
 
@@ -599,27 +613,6 @@ export class TimelineView extends BasesView implements HoverParent {
 				linktext: item.file.path,
 			});
 		});
-	}
-
-	private renderUnscheduled(groups: RenderGroup[]): void {
-		this.unscheduledEl.empty();
-		const show = (this.config.get("showUnscheduled") as boolean) ?? true;
-		const items = groups.flatMap((g) => g.unscheduled);
-		if (!show || !items.length) {
-			this.unscheduledEl.hide();
-			return;
-		}
-		this.unscheduledEl.show();
-		this.unscheduledEl.createSpan({
-			cls: "ptl-unscheduled-title",
-			text: `Senza data (${items.length})`,
-		});
-		const list = this.unscheduledEl.createDiv("ptl-unscheduled-list");
-		for (const item of items) {
-			const chip = list.createDiv(`ptl-chip mod-${item.priority}`);
-			chip.createSpan({ text: item.title });
-			this.registerDomEvent(chip, "click", (e) => this.openFile(e, item.file));
-		}
 	}
 
 	private restoreScroll(): void {
