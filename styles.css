@@ -137,6 +137,12 @@
 	gap: 4px;
 	padding: 0 8px;
 	cursor: pointer;
+	border-top: 1px solid var(--background-modifier-border);
+	box-sizing: border-box;
+}
+
+.ptl-side-group:first-child {
+	border-top: none;
 }
 
 .ptl-side-group:hover {
@@ -385,6 +391,12 @@
 	height: 32px;
 	display: flex;
 	align-items: center;
+	border-top: 1px solid var(--background-modifier-border);
+	box-sizing: border-box;
+}
+
+.ptl-group-row:first-child {
+	border-top: none;
 }
 
 .ptl-group-label {
