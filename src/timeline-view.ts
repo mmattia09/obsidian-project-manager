@@ -211,6 +211,8 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private drag: DragState | null = null;
 	private pendingUpdate = false;
+	private ticksRowEl: HTMLElement | null = null;
+	private dragBadges: HTMLElement[] = [];
 
 	constructor(controller: QueryController, parentEl: HTMLElement) {
 		super(controller);
@@ -450,6 +452,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const header = canvas.createDiv("ptl-header");
 		const monthsRow = header.createDiv("ptl-months");
 		const ticksRow = header.createDiv("ptl-ticks");
+		this.ticksRowEl = ticksRow;
 		const yearBlocks = tick === "month" || tick === "quarter";
 
 		// Top row: month labels, or year labels at wide zooms.
@@ -672,7 +675,11 @@ export class TimelineView extends BasesView implements HoverParent {
 			newEnd: e0,
 			moved: false,
 		};
-		bar.setPointerCapture(e.pointerId);
+		try {
+			bar.setPointerCapture(e.pointerId);
+		} catch {
+			// Pointer capture can fail for synthetic events; drag still works.
+		}
 	}
 
 	private onBarPointerMove = (e: PointerEvent): void => {
@@ -693,14 +700,54 @@ export class TimelineView extends BasesView implements HoverParent {
 		d.barEl.style.left = `${(d.newStart - this.minDay) * this.pxPerDay + 1}px`;
 		d.barEl.style.width = `${Math.max((d.newEnd - d.newStart + 1) * this.pxPerDay - 2, 8)}px`;
 		this.rootEl.toggleClass("is-dragging", d.moved);
+		if (d.moved) this.updateDragBadges(d);
 	};
+
+	private formatDay(day: number): string {
+		return dateOf(day).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
+	}
+
+	// Date badges shown while dragging: at the bar edges and in the header ticks.
+	private updateDragBadges(d: DragState): void {
+		this.clearDragBadges();
+		const row = d.barEl.parentElement;
+		if (!row) return;
+		const showStart = d.mode !== "resize-right";
+		const showEnd = d.mode !== "resize-left";
+		const barLeft = (d.newStart - this.minDay) * this.pxPerDay;
+		const barRight = (d.newEnd - this.minDay + 1) * this.pxPerDay;
+		const make = (host: HTMLElement, cls: string, text: string, left: number) => {
+			const b = host.createDiv(`ptl-drag-badge ${cls}`);
+			b.setText(text);
+			b.style.left = `${left}px`;
+			this.dragBadges.push(b);
+		};
+		if (showStart) {
+			make(row, "mod-start", this.formatDay(d.newStart), barLeft - 6);
+			if (this.ticksRowEl) make(this.ticksRowEl, "mod-header", this.formatDay(d.newStart), (d.newStart - this.minDay + 0.5) * this.pxPerDay);
+		}
+		if (showEnd) {
+			make(row, "mod-end", this.formatDay(d.newEnd), barRight + 6);
+			if (this.ticksRowEl) make(this.ticksRowEl, "mod-header", this.formatDay(d.newEnd), (d.newEnd - this.minDay + 0.5) * this.pxPerDay);
+		}
+	}
+
+	private clearDragBadges(): void {
+		for (const b of this.dragBadges) b.remove();
+		this.dragBadges = [];
+	}
 
 	private onBarPointerUp = (e: PointerEvent): void => {
 		const d = this.drag;
 		if (!d || e.pointerId !== d.pointerId) return;
-		d.barEl.releasePointerCapture(d.pointerId);
+		try {
+			d.barEl.releasePointerCapture(d.pointerId);
+		} catch {
+			// No capture to release (e.g. synthetic events).
+		}
 		this.drag = null;
 		this.rootEl.removeClass("is-dragging");
+		this.clearDragBadges();
 		if (d.moved) {
 			d.barEl.addClass("mod-dragged");
 			void this.applyDates(d);
