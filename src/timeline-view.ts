@@ -232,7 +232,7 @@ export class TimelineView extends BasesView implements HoverParent {
 
 		// Floating controls shown when the sidebar is collapsed.
 		const expand = this.rootEl.createDiv("ptl-expand-controls");
-		const expandBtn = expand.createEl("button", { cls: "ptl-icon-btn mod-floating" });
+		const expandBtn = expand.createEl("button", { cls: "ptl-icon-btn" });
 		setIcon(expandBtn, "lucide-chevrons-right");
 		expandBtn.setAttr("aria-label", "Mostra pannello laterale");
 		this.registerDomEvent(expandBtn, "click", () => this.toggleSidebar());
