@@ -1,0 +1,10 @@
+{
+	"id": "project-manager",
+	"name": "Project Manager",
+	"version": "0.1.0",
+	"minAppVersion": "1.10.2",
+	"description": "Timeline view for Obsidian Bases (Notion-style) to manage project notes with status, priority, start and end dates.",
+	"author": "mmattia09",
+	"authorUrl": "https://github.com/mmattia09",
+	"isDesktopOnly": false
+}

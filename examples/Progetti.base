@@ -1,0 +1,20 @@
+filters:
+  and:
+    - file.inFolder("Progetti")
+views:
+  - type: project-timeline
+    name: Timeline
+    start: note.start
+    end: note.end
+    priority: note.priority
+    zoom: month
+    showUnscheduled: true
+  - type: table
+    name: Tabella
+    order:
+      - file.name
+      - note.status
+      - note.priority
+      - note.start
+      - note.end
+      - note.tags

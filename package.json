@@ -1,0 +1,19 @@
+{
+	"name": "obsidian-project-manager",
+	"version": "0.1.0",
+	"description": "Notion-style timeline view for Obsidian Bases to manage project notes",
+	"main": "main.js",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+	},
+	"type": "commonjs",
+	"devDependencies": {
+		"@types/node": "^26.1.1",
+		"builtin-modules": "^5.3.0",
+		"esbuild": "^0.28.1",
+		"obsidian": "^1.13.1",
+		"typescript": "^7.0.2"
+	},
+	"private": true
+}
