@@ -4,10 +4,15 @@ filters:
 views:
   - type: project-timeline
     name: Timeline
+    groupBy:
+      property: note.status
+      direction: ASC
     start: note.start
     end: note.end
     priority: note.priority
     zoom: month
+    sortByPriority: true
+    sidebar: true
     showUnscheduled: true
   - type: table
     name: Tabella
