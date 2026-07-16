@@ -226,6 +226,20 @@
 	display: flex;
 }
 
+/* Floating over the timeline: solid background so they stay legible. */
+.ptl-expand-controls .ptl-btn,
+.ptl-expand-controls .ptl-icon-btn,
+.ptl-expand-controls .ptl-zoom-select {
+	background-color: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	box-shadow: var(--shadow-s);
+}
+
+.ptl-expand-controls .ptl-btn:hover,
+.ptl-expand-controls .ptl-icon-btn:hover {
+	background-color: var(--background-modifier-hover);
+}
+
 /* ----- header ----- */
 
 .ptl-header {
