@@ -206,6 +206,13 @@
 }
 
 
+.ptl-zoom-select {
+	height: 26px;
+	padding: 0 22px 0 8px;
+	font-size: var(--font-ui-smaller);
+	max-width: 130px;
+}
+
 .ptl-expand-controls {
 	position: absolute;
 	top: 8px;

@@ -59,6 +59,16 @@ const ZOOMS: Record<string, ZoomSpec> = {
 	fiveyear: { pxPerDay: 0.5, tick: "quarter" },
 };
 
+const ZOOM_LABELS: Record<string, string> = {
+	day: "Giorno",
+	week: "Settimana",
+	biweek: "Due settimane",
+	month: "Mese",
+	quarter: "Trimestre",
+	year: "Anno",
+	fiveyear: "5 anni",
+};
+
 interface TimelineItem {
 	entry: BasesEntry;
 	file: TFile;
@@ -157,15 +167,7 @@ export function timelineViewOptions(): BasesAllOptions[] {
 					key: "zoom",
 					displayName: "Zoom",
 					default: "month",
-					options: {
-						day: "Giorno",
-						week: "Settimana",
-						biweek: "Due settimane",
-						month: "Mese",
-						quarter: "Trimestre",
-						year: "Anno",
-						fiveyear: "5 anni",
-					},
+					options: { ...ZOOM_LABELS },
 				},
 				{
 					type: "toggle",
@@ -198,6 +200,7 @@ export class TimelineView extends BasesView implements HoverParent {
 	private sidebarEl: HTMLElement;
 	private sidebarBodyEl: HTMLElement;
 	private scrollerEl: HTMLElement;
+	private zoomSelects: HTMLSelectElement[] = [];
 
 	private minDay = 0;
 	private pxPerDay = ZOOMS.month.pxPerDay;
@@ -223,6 +226,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const sideHeader = this.sidebarEl.createDiv("ptl-sidebar-header");
 		const todayBtn = sideHeader.createEl("button", { text: "Oggi", cls: "ptl-btn ptl-today-btn" });
 		this.registerDomEvent(todayBtn, "click", () => this.scrollToToday());
+		this.createZoomSelect(sideHeader);
 		sideHeader.createDiv("ptl-spacer");
 		const collapseBtn = sideHeader.createEl("button", { cls: "ptl-icon-btn ptl-collapse-btn" });
 		setIcon(collapseBtn, "lucide-chevrons-left");
@@ -240,6 +244,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.registerDomEvent(expandBtn, "click", () => this.toggleSidebar());
 		const todayBtn2 = expand.createEl("button", { text: "Oggi", cls: "ptl-btn" });
 		this.registerDomEvent(todayBtn2, "click", () => this.scrollToToday());
+		this.createZoomSelect(expand);
 
 		this.registerDomEvent(this.scrollerEl, "scroll", () => {
 			if (this.drag) return;
@@ -277,6 +282,18 @@ export class TimelineView extends BasesView implements HoverParent {
 	private toggleSidebar(): void {
 		this.config.set("sidebar", !this.sidebarVisible());
 		this.render();
+	}
+
+	private createZoomSelect(host: HTMLElement): void {
+		const select = host.createEl("select", { cls: "dropdown ptl-zoom-select" });
+		for (const [key, label] of Object.entries(ZOOM_LABELS)) {
+			select.createEl("option", { text: label, value: key });
+		}
+		this.registerDomEvent(select, "change", () => {
+			this.config.set("zoom", select.value);
+			this.render();
+		});
+		this.zoomSelects.push(select);
 	}
 
 	private collapsedGroups(): string[] {
@@ -366,6 +383,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const zoomKey = (this.config.get("zoom") as string) ?? "month";
 		const zoom = ZOOMS[zoomKey] ?? ZOOMS.month;
 		this.pxPerDay = zoom.pxPerDay;
+		for (const s of this.zoomSelects) s.value = ZOOMS[zoomKey] ? zoomKey : "month";
 
 		const groups = this.buildGroups();
 		const collapsed = new Set(this.collapsedGroups());
