@@ -31,6 +31,9 @@ The view registers alongside the native Bases views (Table, Cards, List) under t
 - click to open the note (Cmd/Ctrl+click in a new tab, Alt/Shift+click in a split), hover for the page preview;
 - zoom levels: Day / Week / 2 weeks / Month / Quarter / Year / 5 years;
 - collapsible groups (with Bases "Group by", e.g. by status), ordered by your workflow and sorted by priority within each group;
+- drag a project from the side panel onto another group header to change its status, and click the priority pill on a bar to pick a new priority;
+- when a note was opened in a side split from the timeline, later clicks open notes as new tabs next to it instead of replacing the view;
+- icons assigned with [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) (emoji or icon packs) are shown next to project titles;
 - unscheduled projects appear only in the side panel.
 
 The properties used for start, end and priority are configurable per view (defaults: `start`, `end`, `priority`).
