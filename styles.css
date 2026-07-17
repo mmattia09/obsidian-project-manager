@@ -479,6 +479,55 @@
 .ptl-pill.mod-medium { background: rgba(var(--color-yellow-rgb), 0.18); color: var(--color-yellow); }
 .ptl-pill.mod-low { background: var(--background-modifier-border); color: var(--text-muted); }
 
+.ptl-edge-arrow {
+	position: absolute;
+	top: 50%;
+	transform: translateY(-50%);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	height: 24px;
+	padding: 0 5px;
+	border-radius: var(--radius-s);
+	background: var(--background-secondary-alt);
+	border: 1px solid var(--background-modifier-border);
+	color: var(--text-muted);
+	cursor: pointer;
+	z-index: 12;
+	animation: ptl-fade-in 0.12s ease;
+}
+
+.ptl-edge-arrow.mod-right {
+	transform: translate(-100%, -50%);
+	flex-direction: row-reverse;
+}
+
+.ptl-edge-arrow:hover {
+	color: var(--text-normal);
+	border-color: var(--background-modifier-border-hover);
+}
+
+.ptl-edge-icon {
+	display: flex;
+	align-items: center;
+}
+
+.ptl-edge-icon svg {
+	width: 14px;
+	height: 14px;
+}
+
+.ptl-edge-dates {
+	display: none;
+	font-size: var(--font-ui-smaller);
+	white-space: nowrap;
+}
+
+.ptl-edge-arrow:hover .ptl-edge-dates {
+	display: inline;
+	animation: ptl-fade-in 0.12s ease;
+}
+
 .ptl-row.mod-unscheduled {
 	cursor: copy;
 }

@@ -96,6 +96,16 @@ interface RenderGroup {
 	items: TimelineItem[];
 }
 
+interface BarRowInfo {
+	rowEl: HTMLElement;
+	left: number;
+	right: number;
+	start: number;
+	end: number;
+	arrowEl: HTMLElement | null;
+	side: "left" | "right" | null;
+}
+
 interface DragState {
 	item: TimelineItem;
 	barEl: HTMLElement;
@@ -228,6 +238,8 @@ export class TimelineView extends BasesView implements HoverParent {
 	private pendingUpdate = false;
 	private ticksRowEl: HTMLElement | null = null;
 	private dateLabels: HTMLElement[] = [];
+	private barRows: BarRowInfo[] = [];
+	private arrowRaf = 0;
 
 	constructor(controller: QueryController, parentEl: HTMLElement) {
 		super(controller);
@@ -259,6 +271,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.createZoomSelect(expand);
 
 		this.registerDomEvent(this.scrollerEl, "scroll", () => {
+			this.scheduleArrowUpdate();
 			if (this.drag) return;
 			this.anchorDay = this.minDay + this.scrollerEl.scrollLeft / this.pxPerDay;
 			this.scrollTopSaved = this.scrollerEl.scrollTop;
@@ -427,6 +440,8 @@ export class TimelineView extends BasesView implements HoverParent {
 
 		this.scrollerEl.empty();
 		this.sidebarBodyEl.empty();
+		this.barRows = [];
+		this.dateLabels = [];
 		const canvas = this.scrollerEl.createDiv("ptl-canvas");
 		canvas.style.width = `${totalDays * this.pxPerDay}px`;
 
@@ -477,6 +492,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 
 		this.restoreScroll();
+		this.scheduleArrowUpdate();
 	}
 
 	private renderHeader(canvas: HTMLElement, minDay: number, maxDay: number, today: number, tick: TickKind): void {
@@ -612,6 +628,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const width = Math.max((end - start + 1) * this.pxPerDay - 2, 8);
 		bar.style.left = `${left + 1}px`;
 		bar.style.width = `${width}px`;
+		this.barRows.push({ rowEl: row, left, right: left + width, start, end, arrowEl: null, side: null });
 
 		// Label lives inside the bar but may overflow past its edge when
 		// the bar is too small for the title.
@@ -652,6 +669,56 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.registerDomEvent(bar, "mouseleave", () => {
 			if (!this.drag) this.clearDateLabels();
 		});
+	}
+
+	private formatDayFull(day: number): string {
+		return dateOf(day).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+	}
+
+	private scheduleArrowUpdate(): void {
+		if (this.arrowRaf) return;
+		this.arrowRaf = requestAnimationFrame(() => {
+			this.arrowRaf = 0;
+			this.updateEdgeArrows();
+		});
+	}
+
+	// Arrow chips at the viewport edges for bars scrolled out of view:
+	// hover reveals the dates, click scrolls the bar back into view.
+	private updateEdgeArrows(): void {
+		const viewLeft = this.scrollerEl.scrollLeft;
+		const viewRight = viewLeft + this.scrollerEl.clientWidth;
+		for (const info of this.barRows) {
+			let side: "left" | "right" | null = null;
+			if (info.right < viewLeft + 16) side = "left";
+			else if (info.left > viewRight - 16) side = "right";
+			if (side !== info.side) {
+				info.arrowEl?.remove();
+				info.arrowEl = null;
+				info.side = side;
+				if (side) {
+					const el = info.rowEl.createDiv(`ptl-edge-arrow mod-${side}`);
+					const icon = el.createSpan("ptl-edge-icon");
+					setIcon(icon, side === "left" ? "lucide-arrow-left" : "lucide-arrow-right");
+					el.createSpan({
+						cls: "ptl-edge-dates",
+						text: `${this.formatDayFull(info.start)} → ${this.formatDayFull(info.end)}`,
+					});
+					this.registerDomEvent(el, "click", (e) => {
+						e.stopPropagation();
+						const target =
+							info.side === "left"
+								? info.left - 40
+								: info.right - this.scrollerEl.clientWidth + 40;
+						this.scrollerEl.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+					});
+					info.arrowEl = el;
+				}
+			}
+			if (info.arrowEl && side) {
+				info.arrowEl.style.left = side === "left" ? `${viewLeft + 8}px` : `${viewRight - 8}px`;
+			}
+		}
 	}
 
 	// Hovering an unscheduled row previews a bar under the cursor;
