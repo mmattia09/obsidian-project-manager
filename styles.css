@@ -497,32 +497,28 @@
 .ptl-pill.mod-medium { background: rgba(var(--color-yellow-rgb), 0.18); color: var(--color-yellow); }
 .ptl-pill.mod-low { background: var(--background-modifier-border); color: var(--text-muted); }
 
-.ptl-drag-badge {
+.ptl-date-label {
 	position: absolute;
 	top: 50%;
-	background: var(--background-secondary-alt);
-	border: 1px solid var(--background-modifier-border-hover);
-	border-radius: var(--radius-s);
-	box-shadow: var(--shadow-s);
-	padding: 2px 7px;
 	font-size: var(--font-ui-smaller);
-	color: var(--text-normal);
+	color: var(--text-muted);
 	white-space: nowrap;
 	pointer-events: none;
 	z-index: 15;
+	animation: ptl-fade-in 0.12s ease;
 }
 
-.ptl-drag-badge.mod-start {
+.ptl-date-label.mod-start {
 	transform: translate(-100%, -50%);
 }
 
-.ptl-drag-badge.mod-end {
+.ptl-date-label.mod-end {
 	transform: translateY(-50%);
 }
 
-.ptl-drag-badge.mod-header {
-	transform: translate(-50%, -50%);
-	z-index: 25;
+@keyframes ptl-fade-in {
+	from { opacity: 0; }
+	to { opacity: 1; }
 }
 
 .ptl-handle {

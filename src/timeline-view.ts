@@ -215,7 +215,7 @@ export class TimelineView extends BasesView implements HoverParent {
 	private drag: DragState | null = null;
 	private pendingUpdate = false;
 	private ticksRowEl: HTMLElement | null = null;
-	private dragBadges: HTMLElement[] = [];
+	private dateLabels: HTMLElement[] = [];
 
 	constructor(controller: QueryController, parentEl: HTMLElement) {
 		super(controller);
@@ -634,6 +634,12 @@ export class TimelineView extends BasesView implements HoverParent {
 				linktext: item.file.path,
 			});
 		});
+		this.registerDomEvent(bar, "mouseenter", () => {
+			if (!this.drag) this.showDateLabels(row, start, end, "both");
+		});
+		this.registerDomEvent(bar, "mouseleave", () => {
+			if (!this.drag) this.clearDateLabels();
+		});
 	}
 
 	private restoreScroll(): void {
@@ -718,41 +724,37 @@ export class TimelineView extends BasesView implements HoverParent {
 		d.barEl.style.left = `${(d.newStart - this.minDay) * this.pxPerDay + 1}px`;
 		d.barEl.style.width = `${Math.max((d.newEnd - d.newStart + 1) * this.pxPerDay - 2, 8)}px`;
 		this.rootEl.toggleClass("is-dragging", d.moved);
-		if (d.moved) this.updateDragBadges(d);
+		if (d.moved) {
+			const row = d.barEl.parentElement;
+			if (row) {
+				const which = d.mode === "resize-left" ? "start" : d.mode === "resize-right" ? "end" : "both";
+				this.showDateLabels(row, d.newStart, d.newEnd, which);
+			}
+		}
 	};
 
 	private formatDay(day: number): string {
 		return dateOf(day).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
 	}
 
-	// Date badges shown while dragging: at the bar edges and in the header ticks.
-	private updateDragBadges(d: DragState): void {
-		this.clearDragBadges();
-		const row = d.barEl.parentElement;
-		if (!row) return;
-		const showStart = d.mode !== "resize-right";
-		const showEnd = d.mode !== "resize-left";
-		const barLeft = (d.newStart - this.minDay) * this.pxPerDay;
-		const barRight = (d.newEnd - this.minDay + 1) * this.pxPerDay;
-		const make = (host: HTMLElement, cls: string, text: string, left: number) => {
-			const b = host.createDiv(`ptl-drag-badge ${cls}`);
+	// Plain date labels at the bar edges, shown on hover and while dragging.
+	private showDateLabels(row: HTMLElement, startDay: number, endDay: number, which: "both" | "start" | "end"): void {
+		this.clearDateLabels();
+		const barLeft = (startDay - this.minDay) * this.pxPerDay;
+		const barRight = (endDay - this.minDay + 1) * this.pxPerDay;
+		const make = (cls: string, text: string, left: number) => {
+			const b = row.createDiv(`ptl-date-label ${cls}`);
 			b.setText(text);
 			b.style.left = `${left}px`;
-			this.dragBadges.push(b);
+			this.dateLabels.push(b);
 		};
-		if (showStart) {
-			make(row, "mod-start", this.formatDay(d.newStart), barLeft - 6);
-			if (this.ticksRowEl) make(this.ticksRowEl, "mod-header", this.formatDay(d.newStart), (d.newStart - this.minDay + 0.5) * this.pxPerDay);
-		}
-		if (showEnd) {
-			make(row, "mod-end", this.formatDay(d.newEnd), barRight + 6);
-			if (this.ticksRowEl) make(this.ticksRowEl, "mod-header", this.formatDay(d.newEnd), (d.newEnd - this.minDay + 0.5) * this.pxPerDay);
-		}
+		if (which !== "end") make("mod-start", this.formatDay(startDay), barLeft - 8);
+		if (which !== "start") make("mod-end", this.formatDay(endDay), barRight + 8);
 	}
 
-	private clearDragBadges(): void {
-		for (const b of this.dragBadges) b.remove();
-		this.dragBadges = [];
+	private clearDateLabels(): void {
+		for (const b of this.dateLabels) b.remove();
+		this.dateLabels = [];
 	}
 
 	private onBarPointerUp = (e: PointerEvent): void => {
@@ -765,7 +767,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 		this.drag = null;
 		this.rootEl.removeClass("is-dragging");
-		this.clearDragBadges();
+		this.clearDateLabels();
 		if (d.moved) {
 			d.barEl.addClass("mod-dragged");
 			void this.applyDates(d);
