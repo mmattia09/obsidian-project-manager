@@ -479,6 +479,30 @@
 .ptl-pill.mod-medium { background: rgba(var(--color-yellow-rgb), 0.18); color: var(--color-yellow); }
 .ptl-pill.mod-low { background: var(--background-modifier-border); color: var(--text-muted); }
 
+.ptl-row.mod-unscheduled {
+	cursor: copy;
+}
+
+.ptl-ghost {
+	position: absolute;
+	top: 4px;
+	height: 30px;
+	display: flex;
+	align-items: center;
+	padding: 0 8px;
+	border-radius: var(--radius-m);
+	border: 1px dashed var(--text-faint);
+	background: var(--background-modifier-hover);
+	box-sizing: border-box;
+	pointer-events: none;
+	opacity: 0.8;
+	animation: ptl-fade-in 0.12s ease;
+}
+
+.ptl-ghost .ptl-title {
+	color: var(--text-muted);
+}
+
 .ptl-date-label {
 	position: absolute;
 	top: 50%;

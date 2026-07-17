@@ -59,6 +59,17 @@ const ZOOMS: Record<string, ZoomSpec> = {
 	fiveyear: { pxPerDay: 0.5, tick: "quarter" },
 };
 
+// Default project length (in days) when quick-scheduling at each zoom.
+const DEFAULT_SPAN: Record<string, number> = {
+	day: 1,
+	week: 3,
+	biweek: 5,
+	month: 7,
+	quarter: 14,
+	year: 30,
+	fiveyear: 90,
+};
+
 const ZOOM_LABELS: Record<string, string> = {
 	day: "Giorno",
 	week: "Settimana",
@@ -204,6 +215,7 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private minDay = 0;
 	private pxPerDay = ZOOMS.month.pxPerDay;
+	private zoomKey = "month";
 	private startPid: BasesPropertyId | null = null;
 	private endPid: BasesPropertyId | null = null;
 
@@ -383,7 +395,8 @@ export class TimelineView extends BasesView implements HoverParent {
 		const zoomKey = (this.config.get("zoom") as string) ?? "month";
 		const zoom = ZOOMS[zoomKey] ?? ZOOMS.month;
 		this.pxPerDay = zoom.pxPerDay;
-		for (const s of this.zoomSelects) s.value = ZOOMS[zoomKey] ? zoomKey : "month";
+		this.zoomKey = ZOOMS[zoomKey] ? zoomKey : "month";
+		for (const s of this.zoomSelects) s.value = this.zoomKey;
 
 		const groups = this.buildGroups();
 		const collapsed = new Set(this.collapsedGroups());
@@ -585,9 +598,12 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private renderRow(body: HTMLElement, item: TimelineItem): void {
 		const row = body.createDiv("ptl-row");
-		// Unscheduled projects are listed in the sidebar only: keep the
-		// timeline row as an empty spacer so the two panes stay aligned.
-		if (!item.scheduled) return;
+		// Unscheduled projects are listed in the sidebar only; their timeline
+		// row is an empty spacer that supports quick scheduling on hover.
+		if (!item.scheduled) {
+			if (this.canEdit()) this.setupQuickSchedule(row, item);
+			return;
+		}
 		const start = item.start ?? item.end!;
 		const end = item.end ?? item.start!;
 
@@ -636,6 +652,53 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.registerDomEvent(bar, "mouseleave", () => {
 			if (!this.drag) this.clearDateLabels();
 		});
+	}
+
+	// Hovering an unscheduled row previews a bar under the cursor;
+	// clicking writes the previewed dates to the note.
+	private setupQuickSchedule(row: HTMLElement, item: TimelineItem): void {
+		row.addClass("mod-unscheduled");
+		let ghost: HTMLElement | null = null;
+		let ghostStart = 0;
+		let ghostEnd = 0;
+		this.registerDomEvent(row, "mousemove", (e) => {
+			if (this.drag) return;
+			const rect = row.getBoundingClientRect();
+			const day = this.minDay + Math.floor((e.clientX - rect.left) / this.pxPerDay);
+			const span = DEFAULT_SPAN[this.zoomKey] ?? 7;
+			ghostStart = day;
+			ghostEnd = day + span - 1;
+			if (!ghost) {
+				ghost = row.createDiv("ptl-ghost");
+				ghost.createDiv("ptl-label").createSpan({ cls: "ptl-title", text: item.title });
+			}
+			ghost.style.left = `${(ghostStart - this.minDay) * this.pxPerDay + 1}px`;
+			ghost.style.width = `${Math.max((ghostEnd - ghostStart + 1) * this.pxPerDay - 2, 8)}px`;
+			this.showDateLabels(row, ghostStart, ghostEnd, "both");
+		});
+		this.registerDomEvent(row, "mouseleave", () => {
+			ghost?.remove();
+			ghost = null;
+			this.clearDateLabels();
+		});
+		this.registerDomEvent(row, "click", () => {
+			if (!ghost) return;
+			void this.applyQuickDates(item, ghostStart, ghostEnd);
+		});
+	}
+
+	private async applyQuickDates(item: TimelineItem, start: number, end: number): Promise<void> {
+		const startProp = this.startPid ? parsePropertyId(this.startPid) : null;
+		const endProp = this.endPid ? parsePropertyId(this.endPid) : null;
+		try {
+			await this.app.fileManager.processFrontMatter(item.file, (fm) => {
+				if (startProp?.type === "note") fm[startProp.name] = isoFromDayIndex(start);
+				if (endProp?.type === "note") fm[endProp.name] = isoFromDayIndex(end);
+			});
+		} catch (err) {
+			console.error("Project Manager: failed to set dates", err);
+			new Notice("Impossibile impostare le date del progetto.");
+		}
 	}
 
 	private restoreScroll(): void {
