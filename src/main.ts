@@ -1,4 +1,4 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, normalizePath } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, Setting, SettingDefinitionItem, normalizePath } from "obsidian";
 import { TIMELINE_VIEW_TYPE, TimelineView, timelineViewOptions } from "./timeline-view";
 import { t } from "./i18n";
 
@@ -78,7 +78,7 @@ export default class ProjectManagerPlugin extends Plugin {
 			path = normalizePath(`${folder}/${base} ${counter}.md`);
 		}
 		const file = await this.app.vault.create(path, "");
-		await this.app.fileManager.processFrontMatter(file, (fm) => {
+		await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 			fm[s.statusKey] = s.defaultStatus;
 			fm[s.priorityKey] = s.defaultPriority;
 			fm[s.tagsKey] = [];
@@ -90,7 +90,8 @@ export default class ProjectManagerPlugin extends Plugin {
 	}
 
 	async loadSettings(): Promise<void> {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) as Partial<ProjectManagerSettings> | null;
+		this.settings = { ...DEFAULT_SETTINGS, ...data };
 	}
 
 	async saveSettings(): Promise<void> {
@@ -104,6 +105,48 @@ class ProjectManagerSettingTab extends PluginSettingTab {
 	constructor(app: App, plugin: ProjectManagerPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
+	}
+
+	// Declarative definitions (Obsidian 1.13+): powers the settings search.
+	getSettingDefinitions(): SettingDefinitionItem[] {
+		const text = (name: string, desc: string, key: keyof ProjectManagerSettings) => ({
+			name,
+			desc,
+			control: { type: "text" as const, key, defaultValue: DEFAULT_SETTINGS[key] },
+		});
+		return [
+			text(t("settings.folder"), t("settings.folderDesc"), "projectsFolder"),
+			text(t("settings.statusOrder"), t("settings.statusOrderDesc"), "statusOrder"),
+			{
+				type: "group",
+				heading: t("settings.properties"),
+				items: [
+					text(t("settings.statusKey"), t("settings.statusKeyDesc"), "statusKey"),
+					text(t("settings.priorityKey"), t("settings.priorityKeyDesc"), "priorityKey"),
+					text(t("settings.startKey"), t("settings.startKeyDesc"), "startKey"),
+					text(t("settings.endKey"), t("settings.endKeyDesc"), "endKey"),
+					text(t("settings.tagsKey"), t("settings.tagsKeyDesc"), "tagsKey"),
+				],
+			},
+			{
+				type: "group",
+				heading: t("settings.defaults"),
+				items: [
+					text(t("settings.defaultStatus"), t("settings.defaultStatusDesc"), "defaultStatus"),
+					text(t("settings.defaultPriority"), t("settings.defaultPriorityDesc"), "defaultPriority"),
+				],
+			},
+		];
+	}
+
+	getControlValue(key: string): unknown {
+		return this.plugin.settings[key as keyof ProjectManagerSettings];
+	}
+
+	async setControlValue(key: string, value: unknown): Promise<void> {
+		const k = key as keyof ProjectManagerSettings;
+		this.plugin.settings[k] = (typeof value === "string" && value.trim()) || DEFAULT_SETTINGS[k];
+		await this.plugin.saveSettings();
 	}
 
 	display(): void {
