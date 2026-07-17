@@ -683,8 +683,54 @@ export class TimelineView extends BasesView implements HoverParent {
 		menu.showAtMouseEvent(e);
 	}
 
+	// Optional Iconize (obsidian-icon-folder) integration: render the
+	// file's icon, whether it is an emoji or a named icon pack glyph.
+	private renderFileIcon(host: HTMLElement, path: string): void {
+		type IconizePlugin = {
+			data?: Record<string, unknown>;
+			api?: {
+				util?: { dom?: { setIconForNode?: (p: unknown, icon: string, node: HTMLElement) => void } };
+				getIconByName?: (icon: string) => { svgElement?: string } | null;
+			};
+		};
+		const iconize = (
+			this.app as unknown as { plugins?: { plugins?: Record<string, IconizePlugin> } }
+		).plugins?.plugins?.["obsidian-icon-folder"];
+		if (!iconize) return;
+		const entry = iconize.data?.[path];
+		const icon =
+			typeof entry === "string" ? entry : (entry as { iconName?: string } | undefined)?.iconName;
+		if (!icon || typeof icon !== "string") return;
+		const span = host.createSpan("ptl-icon");
+		if (!/^[A-Za-z][A-Za-z0-9-]*$/.test(icon)) {
+			// Emoji / plain unicode icon.
+			span.setText(icon);
+			return;
+		}
+		try {
+			iconize.api?.util?.dom?.setIconForNode?.(iconize, icon, span);
+		} catch {
+			// Ignore and try the lower-level API below.
+		}
+		if (!span.hasChildNodes()) {
+			try {
+				const svg = iconize.api?.getIconByName?.(icon)?.svgElement;
+				if (typeof svg === "string") {
+					const doc = new DOMParser().parseFromString(svg, "image/svg+xml");
+					if (doc.documentElement.nodeName.toLowerCase() === "svg") {
+						span.appendChild(document.importNode(doc.documentElement, true));
+					}
+				}
+			} catch {
+				// Icon pack not available: drop the placeholder below.
+			}
+		}
+		if (!span.hasChildNodes() && !span.textContent) span.remove();
+	}
+
 	private renderSideRow(item: TimelineItem): void {
 		const row = this.sidebarBodyEl.createDiv("ptl-side-row");
+		this.renderFileIcon(row, item.file.path);
 		row.createSpan({ cls: "ptl-side-title", text: item.title });
 		this.registerDomEvent(row, "click", (e) => this.openFile(e, item.file));
 		row.draggable = true;
@@ -756,6 +802,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		// Label lives inside the bar but may overflow past its edge when
 		// the bar is too small for the title.
 		const label = bar.createDiv("ptl-label");
+		this.renderFileIcon(label, item.file.path);
 		label.createSpan({ cls: "ptl-title", text: item.title });
 		if (item.priorityLabel) {
 			const pill = label.createSpan({ cls: `ptl-pill mod-${item.priority}`, text: item.priorityLabel });

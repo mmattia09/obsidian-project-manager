@@ -120,6 +120,20 @@
 	background: var(--background-modifier-hover);
 }
 
+.ptl-icon {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	font-size: var(--font-ui-small);
+	line-height: 1;
+	color: var(--text-muted);
+}
+
+.ptl-icon svg {
+	width: 15px;
+	height: 15px;
+}
+
 .ptl-side-title {
 	flex: 1;
 	min-width: 0;
