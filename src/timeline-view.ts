@@ -610,9 +610,30 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 	}
 
+	private splitLeaf: WorkspaceLeaf | null = null;
+
 	private openFile(e: MouseEvent, file: TFile): void {
-		const paneType: PaneType | boolean = e.altKey || e.shiftKey ? "split" : Keymap.isModEvent(e);
-		void this.app.workspace.getLeaf(paneType).openFile(file);
+		let leaf: WorkspaceLeaf;
+		const mod: PaneType | boolean = Keymap.isModEvent(e);
+		if (e.altKey || e.shiftKey) {
+			leaf = this.app.workspace.getLeaf("split");
+			this.splitLeaf = leaf;
+		} else if (!mod && this.isLeafAlive(this.splitLeaf)) {
+			// A side split opened from this view is still around: open the
+			// note as a new tab next to it instead of replacing this view.
+			this.app.workspace.setActiveLeaf(this.splitLeaf!, { focus: false });
+			leaf = this.app.workspace.getLeaf("tab");
+			this.splitLeaf = leaf;
+		} else {
+			leaf = this.app.workspace.getLeaf(mod);
+		}
+		void leaf.openFile(file);
+	}
+
+	private isLeafAlive(leaf: WorkspaceLeaf | null): boolean {
+		// A detached leaf loses its parent; also ignore leaves whose view
+		// container is no longer connected to the DOM.
+		return !!leaf && !!(leaf as unknown as { parent?: unknown }).parent;
 	}
 
 	// Dragging a sidebar row onto another group header moves the project
