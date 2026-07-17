@@ -764,7 +764,7 @@ export class TimelineView extends BasesView implements HoverParent {
 				if (endProp?.type === "note") fm[endProp.name] = isoFromDayIndex(end);
 			});
 		} catch (err) {
-			console.error("Project Manager: failed to set dates", err);
+			console.error("Bases Timeline: failed to set dates", err);
 			new Notice(t("notice.updateFailed"));
 		}
 	}
@@ -935,7 +935,7 @@ export class TimelineView extends BasesView implements HoverParent {
 				}
 			});
 		} catch (err) {
-			console.error("Project Manager: failed to update dates", err);
+			console.error("Bases Timeline: failed to update dates", err);
 			new Notice(t("notice.updateFailed"));
 			this.render();
 		}

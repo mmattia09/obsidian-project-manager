@@ -1,4 +1,4 @@
-# Project Manager
+# Bases Timeline
 
 An [Obsidian](https://obsidian.md) plugin that adds a Notion-style **Timeline** view to [Bases](https://help.obsidian.md/bases), designed to manage projects as notes with properties.
 
@@ -52,8 +52,8 @@ Requires Obsidian **1.10.2+**.
 ### Manual
 
 1. Download (or build) `main.js`, `manifest.json` and `styles.css`.
-2. Copy them to `<vault>/.obsidian/plugins/project-manager/`.
-3. Reload Obsidian and enable **Project Manager** in Settings → Community plugins.
+2. Copy them to `<vault>/.obsidian/plugins/bases-timeline/`.
+3. Reload Obsidian and enable **Bases Timeline** in Settings → Community plugins.
 
 ### Building
 
