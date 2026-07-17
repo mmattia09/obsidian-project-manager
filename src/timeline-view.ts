@@ -597,13 +597,9 @@ export class TimelineView extends BasesView implements HoverParent {
 		bar.style.left = `${left + 1}px`;
 		bar.style.width = `${width}px`;
 
-		const labelInside = width >= 110;
-		const labelHost = labelInside ? bar : row;
-		if (!labelInside) {
-			bar.addClass("mod-narrow");
-		}
-		const label = labelHost.createDiv(`ptl-label${labelInside ? "" : " mod-outside"}`);
-		if (!labelInside) label.style.left = `${left + width + 8}px`;
+		// Label lives inside the bar but may overflow past its edge when
+		// the bar is too small for the title.
+		const label = bar.createDiv("ptl-label");
 		label.createSpan({ cls: "ptl-title", text: item.title });
 		if (item.priorityLabel) {
 			label.createSpan({ cls: `ptl-pill mod-${item.priority}`, text: item.priorityLabel });
@@ -659,11 +655,14 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.sidebarBodyEl.scrollTop = this.scrollTopSaved;
 	}
 
-	private scrollToToday(): void {
+	private scrollToToday(attempt = 0): void {
 		if (this.scrollerEl.clientWidth === 0) {
+			// Not laid out yet (or hidden in mobile list mode): retry briefly.
 			this.firstRender = true;
+			if (attempt < 30) requestAnimationFrame(() => this.scrollToToday(attempt + 1));
 			return;
 		}
+		this.firstRender = false;
 		const today = todayIndex();
 		const target = (today - this.minDay) * this.pxPerDay - this.scrollerEl.clientWidth / 3;
 		this.scrollerEl.scrollLeft = Math.max(0, target);

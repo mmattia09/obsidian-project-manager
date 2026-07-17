@@ -443,10 +443,6 @@
 	border-color: var(--background-modifier-border-focus);
 }
 
-.ptl-bar.mod-narrow {
-	padding: 0;
-}
-
 .is-dragging .ptl-bar,
 .is-dragging {
 	cursor: grabbing;
@@ -456,29 +452,15 @@
 	display: flex;
 	align-items: center;
 	gap: 6px;
-	min-width: 0;
-	max-width: 100%;
-	overflow: hidden;
 	position: sticky;
 	left: 8px;
 	pointer-events: none;
-}
-
-.ptl-label.mod-outside {
-	position: absolute;
-	top: 0;
-	height: 100%;
-	max-width: none;
-	overflow: visible;
-	white-space: nowrap;
 }
 
 .ptl-title {
 	font-size: var(--font-ui-small);
 	color: var(--text-normal);
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
 .ptl-pill {
