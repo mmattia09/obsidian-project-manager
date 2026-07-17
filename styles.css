@@ -1,8 +1,9 @@
 /* Obsidian gives every Bases view a 60px bottom padding
    (--bases-view-padding: 0 0 60px) plus a stable scrollbar gutter:
-   remove both, the timeline manages its own scrolling. */
+   remove both, the timeline manages its own scrolling.
+   .ptl-bases-view is added by the view to its .bases-view ancestor. */
 .bases-view[data-view-type="project-timeline"],
-.bases-view:has(> .ptl-container) {
+.bases-view.ptl-bases-view {
 	--bases-view-padding: 0;
 	padding: 0;
 	scrollbar-gutter: auto;

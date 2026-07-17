@@ -259,6 +259,8 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 	) {
 		super(controller);
+		// Marker class for the container overrides in styles.css (avoids :has).
+		parentEl.closest(".bases-view")?.addClass("ptl-bases-view");
 		this.rootEl = parentEl.createDiv("ptl-container");
 		const main = this.rootEl.createDiv("ptl-main");
 
@@ -421,7 +423,9 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	// ----- rendering -----
 
-	private render(): void {
+	private lastSignature = "";
+
+	private render(force = false): void {
 		const zoomKey = (this.config.get("zoom") as string) ?? "month";
 		const zoom = ZOOMS[zoomKey] ?? ZOOMS.month;
 		this.pxPerDay = zoom.pxPerDay;
@@ -431,6 +435,27 @@ export class TimelineView extends BasesView implements HoverParent {
 		const groups = this.buildGroups();
 		const collapsed = new Set(this.collapsedGroups());
 		const today = todayIndex();
+
+		// Bases pushes a fresh result set on many events (e.g. focus changes)
+		// even when nothing changed. Rebuilding the DOM then would destroy
+		// the element under the pointer mid-click and cause visible flicker
+		// while typing in the toolbar search, so skip identical renders.
+		const signature = JSON.stringify([
+			this.zoomKey,
+			this.sidebarVisible(),
+			[...collapsed].sort(),
+			today,
+			this.startPid,
+			this.endPid,
+			groups.map((g) => [
+				g.label,
+				g.items.map(
+					(i) => `${i.file.path}|${i.start}|${i.end}|${i.priority}|${i.priorityLabel}|${i.title}`
+				),
+			]),
+		]);
+		if (!force && signature === this.lastSignature) return;
+		this.lastSignature = signature;
 
 		const sidebarVisible = this.sidebarVisible();
 		this.rootEl.toggleClass("is-sidebar-hidden", !sidebarVisible);
@@ -659,7 +684,7 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private async setFrontmatterValue(file: TFile, key: string, value: string): Promise<void> {
 		try {
-			await this.app.fileManager.processFrontMatter(file, (fm) => {
+			await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
 				fm[key] = value;
 			});
 		} catch (err) {
@@ -849,7 +874,7 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private scheduleArrowUpdate(): void {
 		if (this.arrowRaf) return;
-		this.arrowRaf = requestAnimationFrame(() => {
+		this.arrowRaf = window.requestAnimationFrame(() => {
 			this.arrowRaf = 0;
 			this.updateEdgeArrows();
 		});
@@ -903,7 +928,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const startProp = this.startPid ? parsePropertyId(this.startPid) : null;
 		const endProp = this.endPid ? parsePropertyId(this.endPid) : null;
 		try {
-			await this.app.fileManager.processFrontMatter(item.file, (fm) => {
+			await this.app.fileManager.processFrontMatter(item.file, (fm: Record<string, unknown>) => {
 				if (startProp?.type === "note") fm[startProp.name] = isoFromDayIndex(start);
 				if (endProp?.type === "note") fm[endProp.name] = isoFromDayIndex(end);
 			});
@@ -922,7 +947,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		if (this.firstRender || this.anchorDay === null) {
 			this.firstRender = false;
 			// Wait for layout so clientWidth is meaningful.
-			requestAnimationFrame(() => this.scrollToToday());
+			window.requestAnimationFrame(() => this.scrollToToday());
 			return;
 		}
 		this.scrollerEl.scrollLeft = (this.anchorDay - this.minDay) * this.pxPerDay;
@@ -934,7 +959,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		if (this.scrollerEl.clientWidth === 0) {
 			// Not laid out yet (or hidden in mobile list mode): retry briefly.
 			this.firstRender = true;
-			if (attempt < 30) requestAnimationFrame(() => this.scrollToToday(attempt + 1));
+			if (attempt < 30) window.requestAnimationFrame(() => this.scrollToToday(attempt + 1));
 			return;
 		}
 		this.firstRender = false;
@@ -1070,7 +1095,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const startProp = this.startPid ? parsePropertyId(this.startPid) : null;
 		const endProp = this.endPid ? parsePropertyId(this.endPid) : null;
 		try {
-			await this.app.fileManager.processFrontMatter(d.item.file, (fm) => {
+			await this.app.fileManager.processFrontMatter(d.item.file, (fm: Record<string, unknown>) => {
 				if (startProp?.type === "note" && (d.item.start !== null || d.newStart !== d.s0)) {
 					fm[startProp.name] = isoFromDayIndex(d.newStart);
 				}
@@ -1081,7 +1106,8 @@ export class TimelineView extends BasesView implements HoverParent {
 		} catch (err) {
 			console.error("Bases Timeline: failed to update dates", err);
 			new Notice(t("notice.updateFailed"));
-			this.render();
+			// Nothing was written: force a rebuild to snap the bar back.
+			this.render(true);
 		}
 	}
 }
