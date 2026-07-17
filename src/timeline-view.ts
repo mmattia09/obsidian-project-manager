@@ -14,6 +14,7 @@ import {
 	parsePropertyId,
 	setIcon,
 } from "obsidian";
+import { t } from "./i18n";
 
 export const TIMELINE_VIEW_TYPE = "project-timeline";
 
@@ -70,15 +71,15 @@ const DEFAULT_SPAN: Record<string, number> = {
 	fiveyear: 90,
 };
 
-const ZOOM_LABELS: Record<string, string> = {
-	day: "Giorno",
-	week: "Settimana",
-	biweek: "Due settimane",
-	month: "Mese",
-	quarter: "Trimestre",
-	year: "Anno",
-	fiveyear: "5 anni",
-};
+const zoomLabels = (): Record<string, string> => ({
+	day: t("zoom.day"),
+	week: t("zoom.week"),
+	biweek: t("zoom.biweek"),
+	month: t("zoom.month"),
+	quarter: t("zoom.quarter"),
+	year: t("zoom.year"),
+	fiveyear: t("zoom.fiveyear"),
+});
 
 interface TimelineItem {
 	entry: BasesEntry;
@@ -157,55 +158,55 @@ export function timelineViewOptions(): BasesAllOptions[] {
 	return [
 		{
 			type: "group",
-			displayName: "Timeline",
+			displayName: t("timeline"),
 			items: [
 				{
 					type: "property",
 					key: "start",
-					displayName: "Data di inizio",
+					displayName: t("option.start"),
 					default: "note.start",
-					placeholder: "Proprietà",
+					placeholder: t("property"),
 					filter: noteOnly,
 				},
 				{
 					type: "property",
 					key: "end",
-					displayName: "Data di fine",
+					displayName: t("option.end"),
 					default: "note.end",
-					placeholder: "Proprietà",
+					placeholder: t("property"),
 					filter: noteOnly,
 				},
 				{
 					type: "property",
 					key: "priority",
-					displayName: "Priorità",
+					displayName: t("option.priority"),
 					default: "note.priority",
-					placeholder: "Proprietà",
+					placeholder: t("property"),
 					filter: noteOnly,
 				},
 				{
 					type: "dropdown",
 					key: "zoom",
-					displayName: "Zoom",
+					displayName: t("zoom.label"),
 					default: "month",
-					options: { ...ZOOM_LABELS },
+					options: zoomLabels(),
 				},
 				{
 					type: "toggle",
 					key: "sortByPriority",
-					displayName: "Ordina per priorità",
+					displayName: t("option.sortByPriority"),
 					default: true,
 				},
 				{
 					type: "toggle",
 					key: "sidebar",
-					displayName: "Mostra pannello laterale",
+					displayName: t("option.sidebar"),
 					default: true,
 				},
 				{
 					type: "toggle",
 					key: "showUnscheduled",
-					displayName: "Mostra progetti senza data",
+					displayName: t("option.showUnscheduled"),
 					default: true,
 				},
 			],
@@ -241,20 +242,24 @@ export class TimelineView extends BasesView implements HoverParent {
 	private barRows: BarRowInfo[] = [];
 	private arrowRaf = 0;
 
-	constructor(controller: QueryController, parentEl: HTMLElement) {
+	constructor(
+		controller: QueryController,
+		parentEl: HTMLElement,
+		private getStatusOrder: () => string[] = () => STATUS_ORDER
+	) {
 		super(controller);
 		this.rootEl = parentEl.createDiv("ptl-container");
 		const main = this.rootEl.createDiv("ptl-main");
 
 		this.sidebarEl = main.createDiv("ptl-sidebar");
 		const sideHeader = this.sidebarEl.createDiv("ptl-sidebar-header");
-		const todayBtn = sideHeader.createEl("button", { text: "Oggi", cls: "ptl-btn ptl-today-btn" });
+		const todayBtn = sideHeader.createEl("button", { text: t("today"), cls: "ptl-btn ptl-today-btn" });
 		this.registerDomEvent(todayBtn, "click", () => this.scrollToToday());
 		this.createZoomSelect(sideHeader);
 		sideHeader.createDiv("ptl-spacer");
 		const collapseBtn = sideHeader.createEl("button", { cls: "ptl-icon-btn ptl-collapse-btn" });
 		setIcon(collapseBtn, "lucide-chevrons-left");
-		collapseBtn.setAttr("aria-label", "Nascondi pannello laterale");
+		collapseBtn.setAttr("aria-label", t("sidebar.hide"));
 		this.registerDomEvent(collapseBtn, "click", () => this.toggleSidebar());
 		this.sidebarBodyEl = this.sidebarEl.createDiv("ptl-sidebar-body");
 
@@ -264,9 +269,9 @@ export class TimelineView extends BasesView implements HoverParent {
 		const expand = this.rootEl.createDiv("ptl-expand-controls");
 		const expandBtn = expand.createEl("button", { cls: "ptl-icon-btn" });
 		setIcon(expandBtn, "lucide-chevrons-right");
-		expandBtn.setAttr("aria-label", "Mostra pannello laterale");
+		expandBtn.setAttr("aria-label", t("sidebar.show"));
 		this.registerDomEvent(expandBtn, "click", () => this.toggleSidebar());
-		const todayBtn2 = expand.createEl("button", { text: "Oggi", cls: "ptl-btn" });
+		const todayBtn2 = expand.createEl("button", { text: t("today"), cls: "ptl-btn" });
 		this.registerDomEvent(todayBtn2, "click", () => this.scrollToToday());
 		this.createZoomSelect(expand);
 
@@ -311,7 +316,7 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private createZoomSelect(host: HTMLElement): void {
 		const select = host.createEl("select", { cls: "dropdown ptl-zoom-select" });
-		for (const [key, label] of Object.entries(ZOOM_LABELS)) {
+		for (const [key, label] of Object.entries(zoomLabels())) {
 			select.createEl("option", { text: label, value: key });
 		}
 		this.registerDomEvent(select, "change", () => {
@@ -394,9 +399,10 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 
 		// Order groups by workflow status when the labels match known statuses.
+		const order = this.getStatusOrder();
 		const statusIndex = (g: RenderGroup) => {
-			const i = STATUS_ORDER.indexOf((g.label ?? "").toLowerCase());
-			return i === -1 ? STATUS_ORDER.length : i;
+			const i = order.indexOf((g.label ?? "").toLowerCase());
+			return i === -1 ? order.length : i;
 		};
 		groups.sort((a, b) => statusIndex(a) - statusIndex(b));
 		return groups;
@@ -488,7 +494,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 		if (!anyRow) {
 			const empty = body.createDiv("ptl-empty");
-			empty.createSpan({ text: "Nessun progetto da mostrare" });
+			empty.createSpan({ text: t("empty") });
 		}
 
 		this.restoreScroll();
@@ -764,7 +770,7 @@ export class TimelineView extends BasesView implements HoverParent {
 			});
 		} catch (err) {
 			console.error("Project Manager: failed to set dates", err);
-			new Notice("Impossibile impostare le date del progetto.");
+			new Notice(t("notice.updateFailed"));
 		}
 	}
 
@@ -921,7 +927,7 @@ export class TimelineView extends BasesView implements HoverParent {
 			});
 		} catch (err) {
 			console.error("Project Manager: failed to update dates", err);
-			new Notice("Impossibile aggiornare le date del progetto.");
+			new Notice(t("notice.updateFailed"));
 			this.render();
 		}
 	}

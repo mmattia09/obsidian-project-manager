@@ -1,5 +1,6 @@
 import { App, Notice, Plugin, PluginSettingTab, Setting, normalizePath } from "obsidian";
 import { TIMELINE_VIEW_TYPE, TimelineView, timelineViewOptions } from "./timeline-view";
+import { t } from "./i18n";
 
 interface ProjectManagerSettings {
 	projectsFolder: string;
@@ -10,10 +11,11 @@ interface ProjectManagerSettings {
 	tagsKey: string;
 	defaultStatus: string;
 	defaultPriority: string;
+	statusOrder: string;
 }
 
 const DEFAULT_SETTINGS: ProjectManagerSettings = {
-	projectsFolder: "Progetti",
+	projectsFolder: "projects",
 	statusKey: "status",
 	priorityKey: "priority",
 	startKey: "start",
@@ -21,6 +23,7 @@ const DEFAULT_SETTINGS: ProjectManagerSettings = {
 	tagsKey: "tags",
 	defaultStatus: "inbox",
 	defaultPriority: "medium",
+	statusOrder: "inbox, not started, cooking, on hold, clean, archive",
 };
 
 export default class ProjectManagerPlugin extends Plugin {
@@ -30,36 +33,45 @@ export default class ProjectManagerPlugin extends Plugin {
 		await this.loadSettings();
 
 		const registered = this.registerBasesView(TIMELINE_VIEW_TYPE, {
-			name: "Timeline",
+			name: t("timeline"),
 			icon: "lucide-calendar-range",
-			factory: (controller, containerEl) => new TimelineView(controller, containerEl),
+			factory: (controller, containerEl) =>
+				new TimelineView(controller, containerEl, () => this.statusOrderList()),
 			options: timelineViewOptions,
 		});
 		if (!registered) {
-			new Notice("Project Manager: impossibile registrare la vista Timeline. Assicurati che il plugin core Bases sia attivo.");
+			new Notice(t("notice.registerFailed"));
 		}
 
 		this.addCommand({
 			id: "new-project",
-			name: "Nuovo progetto",
+			name: t("command.newProject"),
 			callback: () => void this.createProject(),
 		});
-		this.addRibbonIcon("lucide-folder-kanban", "Nuovo progetto", () => void this.createProject());
+		this.addRibbonIcon("lucide-folder-kanban", t("command.newProject"), () => void this.createProject());
 
 		this.addSettingTab(new ProjectManagerSettingTab(this.app, this));
 	}
 
+	statusOrderList(): string[] {
+		return this.settings.statusOrder
+			.split(",")
+			.map((s) => s.trim().toLowerCase())
+			.filter(Boolean);
+	}
+
 	async createProject(): Promise<void> {
 		const s = this.settings;
-		const folder = normalizePath(s.projectsFolder || "Progetti");
+		const folder = normalizePath(s.projectsFolder || "projects");
 		if (!this.app.vault.getFolderByPath(folder)) {
 			await this.app.vault.createFolder(folder);
 		}
-		let path = normalizePath(`${folder}/Nuovo progetto.md`);
+		const base = t("command.newProject");
+		let path = normalizePath(`${folder}/${base}.md`);
 		let counter = 1;
 		while (this.app.vault.getAbstractFileByPath(path)) {
 			counter++;
-			path = normalizePath(`${folder}/Nuovo progetto ${counter}.md`);
+			path = normalizePath(`${folder}/${base} ${counter}.md`);
 		}
 		const file = await this.app.vault.create(path, "");
 		await this.app.fileManager.processFrontMatter(file, (fm) => {
@@ -98,25 +110,26 @@ class ProjectManagerSettingTab extends PluginSettingTab {
 			new Setting(containerEl)
 				.setName(name)
 				.setDesc(desc)
-				.addText((t) =>
-					t.setValue(this.plugin.settings[key]).onChange(async (v) => {
+				.addText((tc) =>
+					tc.setValue(this.plugin.settings[key]).onChange(async (v) => {
 						this.plugin.settings[key] = v.trim() || DEFAULT_SETTINGS[key];
 						await this.plugin.saveSettings();
 					})
 				);
 		};
 
-		text("Cartella progetti", "Cartella in cui creare le nuove note progetto.", "projectsFolder");
+		text(t("settings.folder"), t("settings.folderDesc"), "projectsFolder");
+		text(t("settings.statusOrder"), t("settings.statusOrderDesc"), "statusOrder");
 
-		new Setting(containerEl).setName("Proprietà").setHeading();
-		text("Stato", "Nome della proprietà per lo stato.", "statusKey");
-		text("Priorità", "Nome della proprietà per la priorità.", "priorityKey");
-		text("Data di inizio", "Nome della proprietà per la data di inizio.", "startKey");
-		text("Data di fine", "Nome della proprietà per la data di fine.", "endKey");
-		text("Tag", "Nome della proprietà per i tag.", "tagsKey");
+		new Setting(containerEl).setName(t("settings.properties")).setHeading();
+		text(t("settings.statusKey"), t("settings.statusKeyDesc"), "statusKey");
+		text(t("settings.priorityKey"), t("settings.priorityKeyDesc"), "priorityKey");
+		text(t("settings.startKey"), t("settings.startKeyDesc"), "startKey");
+		text(t("settings.endKey"), t("settings.endKeyDesc"), "endKey");
+		text(t("settings.tagsKey"), t("settings.tagsKeyDesc"), "tagsKey");
 
-		new Setting(containerEl).setName("Valori predefiniti").setHeading();
-		text("Stato iniziale", "Stato assegnato ai nuovi progetti (es. inbox).", "defaultStatus");
-		text("Priorità iniziale", "Priorità assegnata ai nuovi progetti (es. medium).", "defaultPriority");
+		new Setting(containerEl).setName(t("settings.defaults")).setHeading();
+		text(t("settings.defaultStatus"), t("settings.defaultStatusDesc"), "defaultStatus");
+		text(t("settings.defaultPriority"), t("settings.defaultPriorityDesc"), "defaultPriority");
 	}
 }
