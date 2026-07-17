@@ -38,6 +38,8 @@ The view registers alongside the native Bases views (Table, Cards, List) under t
 
 The properties used for start, end and priority are configurable per view (defaults: `start`, `end`, `priority`).
 
+Note: the Bases toolbar search matches against the view's visible properties (the "Properties" menu). The view defaults to `file.name` when none are configured; add more properties there to make them searchable too.
+
 ## Setup
 
 1. Enable the **Bases** core plugin.

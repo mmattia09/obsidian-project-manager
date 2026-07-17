@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-project-manager",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"description": "Notion-style timeline view for Obsidian Bases to manage project notes",
 	"main": "main.js",
 	"scripts": {

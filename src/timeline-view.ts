@@ -313,7 +313,21 @@ export class TimelineView extends BasesView implements HoverParent {
 			this.pendingUpdate = true;
 			return;
 		}
+		this.ensureSearchableProperties();
 		this.render();
+	}
+
+	// The Bases toolbar search only matches against the view's visible
+	// properties (config.getOrder()). With no properties configured the
+	// search would filter everything out, so default to the file name.
+	private searchDefaultApplied = false;
+
+	private ensureSearchableProperties(): void {
+		if (this.searchDefaultApplied) return;
+		this.searchDefaultApplied = true;
+		if (this.config.getOrder().length === 0) {
+			this.config.set("order", ["file.name"]);
+		}
 	}
 
 	// ----- config helpers -----
