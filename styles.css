@@ -417,6 +417,11 @@
 .ptl-row {
 	position: relative;
 	height: 38px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	user-select: none;
+	-webkit-user-select: none;
 }
 
 .ptl-row:hover {
@@ -480,9 +485,7 @@
 .ptl-pill.mod-low { background: var(--background-modifier-border); color: var(--text-muted); }
 
 .ptl-edge-arrow {
-	position: absolute;
-	top: 50%;
-	transform: translateY(-50%);
+	position: sticky;
 	display: flex;
 	align-items: center;
 	gap: 6px;
@@ -494,11 +497,23 @@
 	color: var(--text-muted);
 	cursor: pointer;
 	z-index: 12;
-	animation: ptl-fade-in 0.12s ease;
+	flex-shrink: 0;
+	visibility: hidden;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
+.ptl-edge-arrow.is-visible {
+	visibility: visible;
+	opacity: 1;
+}
+
+.ptl-edge-arrow.mod-left {
+	left: 8px;
 }
 
 .ptl-edge-arrow.mod-right {
-	transform: translate(-100%, -50%);
+	right: 8px;
 	flex-direction: row-reverse;
 }
 
@@ -560,7 +575,13 @@
 	white-space: nowrap;
 	pointer-events: none;
 	z-index: 15;
-	animation: ptl-fade-in 0.12s ease;
+	opacity: 0;
+	transition: opacity 0.12s ease;
+}
+
+.ptl-row:hover > .ptl-date-label,
+.ptl-date-label.mod-active {
+	opacity: 1;
 }
 
 .ptl-date-label.mod-start {

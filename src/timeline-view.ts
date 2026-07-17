@@ -98,18 +98,17 @@ interface RenderGroup {
 }
 
 interface BarRowInfo {
-	rowEl: HTMLElement;
 	left: number;
 	right: number;
-	start: number;
-	end: number;
-	arrowEl: HTMLElement | null;
-	side: "left" | "right" | null;
+	leftArrowEl: HTMLElement;
+	rightArrowEl: HTMLElement;
 }
 
 interface DragState {
 	item: TimelineItem;
 	barEl: HTMLElement;
+	startLabelEl: HTMLElement | null;
+	endLabelEl: HTMLElement | null;
 	mode: "move" | "resize-left" | "resize-right";
 	pointerId: number;
 	x0: number;
@@ -634,7 +633,36 @@ export class TimelineView extends BasesView implements HoverParent {
 		const width = Math.max((end - start + 1) * this.pxPerDay - 2, 8);
 		bar.style.left = `${left + 1}px`;
 		bar.style.width = `${width}px`;
-		this.barRows.push({ rowEl: row, left, right: left + width, start, end, arrowEl: null, side: null });
+
+		// Sticky edge arrows, revealed when the bar is scrolled out of view.
+		const makeArrow = (side: "left" | "right") => {
+			const el = row.createDiv(`ptl-edge-arrow mod-${side}`);
+			const icon = el.createSpan("ptl-edge-icon");
+			setIcon(icon, side === "left" ? "lucide-arrow-left" : "lucide-arrow-right");
+			el.createSpan({
+				cls: "ptl-edge-dates",
+				text: `${this.formatDayFull(start)} → ${this.formatDayFull(end)}`,
+			});
+			this.registerDomEvent(el, "click", (e) => {
+				e.stopPropagation();
+				const target =
+					side === "left" ? left - 40 : left + width - this.scrollerEl.clientWidth + 40;
+				this.scrollerEl.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
+			});
+			return el;
+		};
+		const leftArrowEl = makeArrow("left");
+		row.createDiv("ptl-spacer");
+		const rightArrowEl = makeArrow("right");
+		this.barRows.push({ left, right: left + width, leftArrowEl, rightArrowEl });
+
+		// Static date labels at the bar edges, revealed on hover / drag via CSS.
+		const startLabel = row.createDiv("ptl-date-label mod-start");
+		startLabel.setText(this.formatDay(start));
+		startLabel.style.left = `${left - 8}px`;
+		const endLabel = row.createDiv("ptl-date-label mod-end");
+		endLabel.setText(this.formatDay(end));
+		endLabel.style.left = `${left + width + 8}px`;
 
 		// Label lives inside the bar but may overflow past its edge when
 		// the bar is too small for the title.
@@ -669,12 +697,6 @@ export class TimelineView extends BasesView implements HoverParent {
 				linktext: item.file.path,
 			});
 		});
-		this.registerDomEvent(bar, "mouseenter", () => {
-			if (!this.drag) this.showDateLabels(row, start, end, "both");
-		});
-		this.registerDomEvent(bar, "mouseleave", () => {
-			if (!this.drag) this.clearDateLabels();
-		});
 	}
 
 	private formatDayFull(day: number): string {
@@ -689,41 +711,14 @@ export class TimelineView extends BasesView implements HoverParent {
 		});
 	}
 
-	// Arrow chips at the viewport edges for bars scrolled out of view:
-	// hover reveals the dates, click scrolls the bar back into view.
+	// The arrows are position:sticky, so the browser keeps them anchored
+	// during (smooth) scrolling; here we only toggle their visibility.
 	private updateEdgeArrows(): void {
 		const viewLeft = this.scrollerEl.scrollLeft;
 		const viewRight = viewLeft + this.scrollerEl.clientWidth;
 		for (const info of this.barRows) {
-			let side: "left" | "right" | null = null;
-			if (info.right < viewLeft + 16) side = "left";
-			else if (info.left > viewRight - 16) side = "right";
-			if (side !== info.side) {
-				info.arrowEl?.remove();
-				info.arrowEl = null;
-				info.side = side;
-				if (side) {
-					const el = info.rowEl.createDiv(`ptl-edge-arrow mod-${side}`);
-					const icon = el.createSpan("ptl-edge-icon");
-					setIcon(icon, side === "left" ? "lucide-arrow-left" : "lucide-arrow-right");
-					el.createSpan({
-						cls: "ptl-edge-dates",
-						text: `${this.formatDayFull(info.start)} → ${this.formatDayFull(info.end)}`,
-					});
-					this.registerDomEvent(el, "click", (e) => {
-						e.stopPropagation();
-						const target =
-							info.side === "left"
-								? info.left - 40
-								: info.right - this.scrollerEl.clientWidth + 40;
-						this.scrollerEl.scrollTo({ left: Math.max(0, target), behavior: "smooth" });
-					});
-					info.arrowEl = el;
-				}
-			}
-			if (info.arrowEl && side) {
-				info.arrowEl.style.left = side === "left" ? `${viewLeft + 8}px` : `${viewRight - 8}px`;
-			}
+			info.leftArrowEl.toggleClass("is-visible", info.right < viewLeft + 16);
+			info.rightArrowEl.toggleClass("is-visible", info.left > viewRight - 16);
 		}
 	}
 
@@ -822,9 +817,14 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 		const s0 = item.start ?? item.end!;
 		const e0 = item.end ?? item.start!;
+		const row = bar.parentElement;
+		const startLabelEl = row?.querySelector<HTMLElement>(".ptl-date-label.mod-start") ?? null;
+		const endLabelEl = row?.querySelector<HTMLElement>(".ptl-date-label.mod-end") ?? null;
 		this.drag = {
 			item,
 			barEl: bar,
+			startLabelEl,
+			endLabelEl,
 			mode,
 			pointerId: e.pointerId,
 			x0: e.clientX,
@@ -856,14 +856,22 @@ export class TimelineView extends BasesView implements HoverParent {
 			d.newStart = d.s0;
 			d.newEnd = Math.max(d.e0 + deltaDays, d.s0);
 		}
-		d.barEl.style.left = `${(d.newStart - this.minDay) * this.pxPerDay + 1}px`;
-		d.barEl.style.width = `${Math.max((d.newEnd - d.newStart + 1) * this.pxPerDay - 2, 8)}px`;
+		const barLeft = (d.newStart - this.minDay) * this.pxPerDay;
+		const barWidth = Math.max((d.newEnd - d.newStart + 1) * this.pxPerDay - 2, 8);
+		d.barEl.style.left = `${barLeft + 1}px`;
+		d.barEl.style.width = `${barWidth}px`;
 		this.rootEl.toggleClass("is-dragging", d.moved);
 		if (d.moved) {
-			const row = d.barEl.parentElement;
-			if (row) {
-				const which = d.mode === "resize-left" ? "start" : d.mode === "resize-right" ? "end" : "both";
-				this.showDateLabels(row, d.newStart, d.newEnd, which);
+			// Keep the static labels pinned to the moving bar edges.
+			if (d.startLabelEl) {
+				d.startLabelEl.setText(this.formatDay(d.newStart));
+				d.startLabelEl.style.left = `${barLeft - 8}px`;
+				d.startLabelEl.addClass("mod-active");
+			}
+			if (d.endLabelEl) {
+				d.endLabelEl.setText(this.formatDay(d.newEnd));
+				d.endLabelEl.style.left = `${barLeft + barWidth + 8}px`;
+				d.endLabelEl.addClass("mod-active");
 			}
 		}
 	};
@@ -872,13 +880,13 @@ export class TimelineView extends BasesView implements HoverParent {
 		return dateOf(day).toLocaleDateString(undefined, { day: "numeric", month: "short", timeZone: "UTC" });
 	}
 
-	// Plain date labels at the bar edges, shown on hover and while dragging.
+	// Transient date labels for the quick-schedule ghost preview.
 	private showDateLabels(row: HTMLElement, startDay: number, endDay: number, which: "both" | "start" | "end"): void {
 		this.clearDateLabels();
 		const barLeft = (startDay - this.minDay) * this.pxPerDay;
 		const barRight = (endDay - this.minDay + 1) * this.pxPerDay;
 		const make = (cls: string, text: string, left: number) => {
-			const b = row.createDiv(`ptl-date-label ${cls}`);
+			const b = row.createDiv(`ptl-date-label mod-active ${cls}`);
 			b.setText(text);
 			b.style.left = `${left}px`;
 			this.dateLabels.push(b);
@@ -902,7 +910,8 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 		this.drag = null;
 		this.rootEl.removeClass("is-dragging");
-		this.clearDateLabels();
+		d.startLabelEl?.removeClass("mod-active");
+		d.endLabelEl?.removeClass("mod-active");
 		if (d.moved) {
 			d.barEl.addClass("mod-dragged");
 			void this.applyDates(d);
