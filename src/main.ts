@@ -36,7 +36,11 @@ export default class ProjectManagerPlugin extends Plugin {
 			name: t("timeline"),
 			icon: "lucide-calendar-range",
 			factory: (controller, containerEl) =>
-				new TimelineView(controller, containerEl, () => this.statusOrderList()),
+				new TimelineView(controller, containerEl, {
+					getStatusOrder: () => this.statusOrderList(),
+					getStatusKey: () => this.settings.statusKey,
+					getPriorityKey: () => this.settings.priorityKey,
+				}),
 			options: timelineViewOptions,
 		});
 		if (!registered) {

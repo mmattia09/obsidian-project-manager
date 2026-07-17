@@ -6,15 +6,23 @@ import {
 	HoverParent,
 	HoverPopover,
 	Keymap,
+	Menu,
 	Notice,
 	PaneType,
 	Platform,
 	QueryController,
 	TFile,
+	WorkspaceLeaf,
 	parsePropertyId,
 	setIcon,
 } from "obsidian";
 import { t } from "./i18n";
+
+export interface TimelineViewDeps {
+	getStatusOrder: () => string[];
+	getStatusKey: () => string;
+	getPriorityKey: () => string;
+}
 
 export const TIMELINE_VIEW_TYPE = "project-timeline";
 
@@ -244,7 +252,11 @@ export class TimelineView extends BasesView implements HoverParent {
 	constructor(
 		controller: QueryController,
 		parentEl: HTMLElement,
-		private getStatusOrder: () => string[] = () => STATUS_ORDER
+		private deps: TimelineViewDeps = {
+			getStatusOrder: () => STATUS_ORDER,
+			getStatusKey: () => "status",
+			getPriorityKey: () => "priority",
+		}
 	) {
 		super(controller);
 		this.rootEl = parentEl.createDiv("ptl-container");
@@ -398,7 +410,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 
 		// Order groups by workflow status when the labels match known statuses.
-		const order = this.getStatusOrder();
+		const order = this.deps.getStatusOrder();
 		const statusIndex = (g: RenderGroup) => {
 			const i = order.indexOf((g.label ?? "").toLowerCase());
 			return i === -1 ? order.length : i;
@@ -470,6 +482,7 @@ export class TimelineView extends BasesView implements HoverParent {
 				sideGroup.createSpan({ cls: "ptl-side-group-label", text: label });
 				sideGroup.createSpan({ cls: "ptl-side-group-count", text: String(g.items.length) });
 				this.registerDomEvent(sideGroup, "click", () => this.toggleGroup(label));
+				if (g.label !== null) this.setupStatusDrop(sideGroup, g.label);
 
 				// Matching spacer row in the timeline; carries the label when the sidebar is hidden.
 				const gh = body.createDiv("ptl-group-row");
@@ -602,10 +615,65 @@ export class TimelineView extends BasesView implements HoverParent {
 		void this.app.workspace.getLeaf(paneType).openFile(file);
 	}
 
+	// Dragging a sidebar row onto another group header moves the project
+	// to that status.
+	private draggingItem: TimelineItem | null = null;
+
+	private setupStatusDrop(groupEl: HTMLElement, status: string): void {
+		this.registerDomEvent(groupEl, "dragover", (e) => {
+			if (!this.draggingItem) return;
+			e.preventDefault();
+			groupEl.addClass("is-drop-target");
+		});
+		this.registerDomEvent(groupEl, "dragleave", () => groupEl.removeClass("is-drop-target"));
+		this.registerDomEvent(groupEl, "drop", (e) => {
+			groupEl.removeClass("is-drop-target");
+			const item = this.draggingItem;
+			this.draggingItem = null;
+			if (!item) return;
+			e.preventDefault();
+			void this.setFrontmatterValue(item.file, this.deps.getStatusKey(), status);
+		});
+	}
+
+	private async setFrontmatterValue(file: TFile, key: string, value: string): Promise<void> {
+		try {
+			await this.app.fileManager.processFrontMatter(file, (fm) => {
+				fm[key] = value;
+			});
+		} catch (err) {
+			console.error("Bases Timeline: failed to update property", err);
+			new Notice(t("notice.updateFailed"));
+		}
+	}
+
+	// Small menu with the four priority levels.
+	private openPriorityMenu(e: MouseEvent, item: TimelineItem): void {
+		const menu = new Menu();
+		for (const level of ["urgent", "high", "medium", "low"] as const) {
+			menu.addItem((mi) => {
+				mi.setTitle(level);
+				if (item.priority === level) mi.setChecked(true);
+				mi.onClick(() => {
+					void this.setFrontmatterValue(item.file, this.deps.getPriorityKey(), level);
+				});
+			});
+		}
+		menu.showAtMouseEvent(e);
+	}
+
 	private renderSideRow(item: TimelineItem): void {
 		const row = this.sidebarBodyEl.createDiv("ptl-side-row");
 		row.createSpan({ cls: "ptl-side-title", text: item.title });
 		this.registerDomEvent(row, "click", (e) => this.openFile(e, item.file));
+		row.draggable = true;
+		this.registerDomEvent(row, "dragstart", (e) => {
+			this.draggingItem = item;
+			e.dataTransfer?.setData("text/plain", item.file.path);
+		});
+		this.registerDomEvent(row, "dragend", () => {
+			this.draggingItem = null;
+		});
 		this.registerDomEvent(row, "mouseover", (e) => {
 			this.app.workspace.trigger("hover-link", {
 				event: e,
@@ -669,7 +737,15 @@ export class TimelineView extends BasesView implements HoverParent {
 		const label = bar.createDiv("ptl-label");
 		label.createSpan({ cls: "ptl-title", text: item.title });
 		if (item.priorityLabel) {
-			label.createSpan({ cls: `ptl-pill mod-${item.priority}`, text: item.priorityLabel });
+			const pill = label.createSpan({ cls: `ptl-pill mod-${item.priority}`, text: item.priorityLabel });
+			if (this.canEdit()) {
+				pill.addClass("is-clickable");
+				this.registerDomEvent(pill, "pointerdown", (e) => e.stopPropagation());
+				this.registerDomEvent(pill, "click", (e) => {
+					e.stopPropagation();
+					this.openPriorityMenu(e, item);
+				});
+			}
 		}
 
 		if (this.canEdit()) {
