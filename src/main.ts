@@ -52,8 +52,6 @@ export default class ProjectManagerPlugin extends Plugin {
 			name: t("command.newProject"),
 			callback: () => void this.createProject(),
 		});
-		this.addRibbonIcon("lucide-folder-kanban", t("command.newProject"), () => void this.createProject());
-
 		this.addSettingTab(new ProjectManagerSettingTab(this.app, this));
 	}
 

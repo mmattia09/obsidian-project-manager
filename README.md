@@ -46,7 +46,7 @@ Note: the Bases toolbar search matches against the view's visible properties (th
 2. Create a `.base` file (see `examples/Progetti.base`) or add a **Timeline** view to an existing Base.
 3. Filter the Base to your projects folder, e.g. `file.inFolder("projects")`.
 
-The plugin also adds a **New project** command (and a ribbon icon) that creates a note in the projects folder with the frontmatter already set. The folder, property names, default values, and the status order used for grouping are configurable in the plugin settings.
+The plugin also adds a **New project** command that creates a note in the projects folder with the frontmatter already set. The folder, property names, default values, and the status order used for grouping are configurable in the plugin settings.
 
 The interface is available in English, Italian, French, German and Spanish, following the Obsidian language.
 
