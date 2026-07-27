@@ -58,6 +58,9 @@ interface ZoomSpec {
 	tick: TickKind;
 }
 
+/** Zoom levels from the widest to the tightest, for pinch stepping. */
+const ZOOM_ORDER = ["fiveyear", "year", "quarter", "month", "biweek", "week", "day"];
+
 const ZOOMS: Record<string, ZoomSpec> = {
 	day: { pxPerDay: 64, tick: "day" },
 	week: { pxPerDay: 32, tick: "day" },
@@ -154,6 +157,11 @@ function isWeekend(day: number): boolean {
 
 function isMonday(day: number): boolean {
 	return ((day % 7) + 7) % 7 === 4;
+}
+
+function touchDistance(e: TouchEvent): number {
+	const [a, b] = [e.touches[0], e.touches[1]];
+	return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
 }
 
 function isQuarterStart(date: Date): boolean {
@@ -288,6 +296,44 @@ export class TimelineView extends BasesView implements HoverParent {
 		this.registerDomEvent(todayBtn2, "click", () => this.scrollToToday());
 		this.createZoomSelect(expand);
 
+		// Trackpad pinch (and ctrl/cmd + wheel) reaches the page as a wheel
+		// event with ctrlKey set; step through the zoom levels instead of
+		// letting the app zoom.
+		this.registerDomEvent(
+			this.scrollerEl,
+			"wheel",
+			(e: WheelEvent) => {
+				if (!e.ctrlKey && !e.metaKey) return;
+				e.preventDefault();
+				this.onPinch(e);
+			},
+			{ passive: false }
+		);
+
+		// Touch devices: two-finger pinch steps the zoom as well.
+		this.registerDomEvent(this.scrollerEl, "touchstart", (e: TouchEvent) => {
+			this.pinchDistance = e.touches.length === 2 ? touchDistance(e) : null;
+		});
+		this.registerDomEvent(
+			this.scrollerEl,
+			"touchmove",
+			(e: TouchEvent) => {
+				if (e.touches.length !== 2 || this.pinchDistance === null) return;
+				e.preventDefault();
+				const distance = touchDistance(e);
+				const ratio = distance / this.pinchDistance;
+				if (ratio > 1.35 || ratio < 0.75) {
+					this.pinchDistance = distance;
+					const midX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+					this.stepZoom(ratio > 1 ? 1 : -1, midX);
+				}
+			},
+			{ passive: false }
+		);
+		this.registerDomEvent(this.scrollerEl, "touchend", () => {
+			this.pinchDistance = null;
+		});
+
 		this.registerDomEvent(this.scrollerEl, "scroll", () => {
 			this.scheduleArrowUpdate();
 			if (this.drag) return;
@@ -338,6 +384,46 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private toggleSidebar(): void {
 		this.config.set("sidebar", !this.sidebarVisible());
+		this.render();
+	}
+
+	// ----- pinch to zoom -----
+
+	private pinchAccum = 0;
+	private pinchDistance: number | null = null;
+
+	/** Trackpads emit a stream of small deltas: accumulate until a step. */
+	private onPinch(e: WheelEvent): void {
+		if (this.drag) return;
+		if (this.pinchAccum !== 0 && Math.sign(e.deltaY) !== Math.sign(this.pinchAccum)) {
+			this.pinchAccum = 0;
+		}
+		this.pinchAccum += e.deltaY;
+		if (Math.abs(this.pinchAccum) < 24) return;
+		// Spreading the fingers gives a negative delta and zooms in.
+		const direction = this.pinchAccum < 0 ? 1 : -1;
+		this.pinchAccum = 0;
+		this.stepZoom(direction, e.clientX);
+	}
+
+	/**
+	 * Moves one zoom level, keeping the day under the pointer anchored so
+	 * the timeline zooms around the cursor rather than the left edge.
+	 */
+	private stepZoom(direction: 1 | -1, clientX: number): void {
+		if (this.drag) return;
+		const current = ZOOM_ORDER.indexOf(this.zoomKey);
+		const next = Math.min(Math.max(current + direction, 0), ZOOM_ORDER.length - 1);
+		if (next === current) return;
+		const nextKey = ZOOM_ORDER[next];
+
+		const rect = this.scrollerEl.getBoundingClientRect();
+		const offsetX = clientX - rect.left;
+		const dayUnderPointer = this.minDay + (this.scrollerEl.scrollLeft + offsetX) / this.pxPerDay;
+		// restoreScroll() puts anchorDay at the left edge of the viewport.
+		this.anchorDay = dayUnderPointer - offsetX / ZOOMS[nextKey].pxPerDay;
+		this.scrollTopSaved = this.scrollerEl.scrollTop;
+		this.config.set("zoom", nextKey);
 		this.render();
 	}
 
@@ -486,7 +572,10 @@ export class TimelineView extends BasesView implements HoverParent {
 				if (e !== null && e > maxDay) maxDay = e;
 			}
 		}
-		const pad = Math.max(14, Math.ceil(500 / this.pxPerDay));
+		// Pad with about a screenful on each side so there is room to scroll
+		// past the first and last project, and to zoom around the pointer.
+		const viewportPx = this.scrollerEl.clientWidth || 500;
+		const pad = Math.max(14, Math.ceil(viewportPx / this.pxPerDay));
 		minDay -= pad;
 		maxDay += pad;
 		// Align range to Mondays so week ticks/grid start cleanly.
@@ -970,17 +1059,25 @@ export class TimelineView extends BasesView implements HoverParent {
 	}
 
 	private scrollToToday(attempt = 0): void {
-		if (this.scrollerEl.clientWidth === 0) {
+		const scroller = this.scrollerEl;
+		if (scroller.clientWidth === 0) {
 			// Not laid out yet (or hidden in mobile list mode): retry briefly.
 			this.firstRender = true;
 			if (attempt < 30) window.requestAnimationFrame(() => this.scrollToToday(attempt + 1));
 			return;
 		}
-		this.firstRender = false;
 		const today = todayIndex();
-		const target = (today - this.minDay) * this.pxPerDay - this.scrollerEl.clientWidth / 3;
-		this.scrollerEl.scrollLeft = Math.max(0, target);
-		this.anchorDay = this.minDay + this.scrollerEl.scrollLeft / this.pxPerDay;
+		const target = Math.max(0, (today - this.minDay) * this.pxPerDay - scroller.clientWidth / 3);
+		scroller.scrollLeft = target;
+		// Until the pane is scrollable the assignment is silently ignored,
+		// which would leave the view pinned to the far left.
+		if (target > 0 && scroller.scrollLeft === 0 && attempt < 30) {
+			this.firstRender = true;
+			window.requestAnimationFrame(() => this.scrollToToday(attempt + 1));
+			return;
+		}
+		this.firstRender = false;
+		this.anchorDay = this.minDay + scroller.scrollLeft / this.pxPerDay;
 	}
 
 	// ----- date editing -----

@@ -29,7 +29,7 @@ The view registers alongside the native Bases views (Table, Cards, List) under t
 - hover the row of an unscheduled project to preview a bar under the cursor and click to schedule it (default length depends on the zoom level);
 - arrow chips appear at the viewport edges for bars scrolled out of view: hover shows the dates, click scrolls back to the bar;
 - click to open the note (Cmd/Ctrl+click in a new tab, Alt/Shift+click in a split), hover for the page preview;
-- zoom levels: Day / Week / 2 weeks / Month / Quarter / Year / 5 years;
+- zoom levels: Day / Week / 2 weeks / Month / Quarter / Year / 5 years — pick one from the header, or **pinch on the trackpad** (ctrl/cmd + wheel, two-finger pinch on touch) to zoom around the pointer;
 - collapsible groups (with Bases "Group by", e.g. by status), ordered by your workflow and sorted by priority within each group;
 - drag a project from the side panel onto another group header to change its status, and click the priority pill on a bar to pick a new priority;
 - when a note was opened in a side split from the timeline, later clicks open notes as new tabs next to it instead of replacing the view;
