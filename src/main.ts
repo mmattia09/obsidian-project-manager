@@ -1,33 +1,21 @@
-import { App, Notice, Plugin, PluginSettingTab, Setting, SettingDefinitionItem, normalizePath } from "obsidian";
+import { App, Notice, Plugin, PluginSettingTab, Setting, SettingDefinitionItem } from "obsidian";
 import { TIMELINE_VIEW_TYPE, TimelineView, timelineViewOptions } from "./timeline-view";
 import { t } from "./i18n";
 
-interface ProjectManagerSettings {
-	projectsFolder: string;
+interface BasesTimelineSettings {
 	statusKey: string;
 	priorityKey: string;
-	startKey: string;
-	endKey: string;
-	tagsKey: string;
-	defaultStatus: string;
-	defaultPriority: string;
 	statusOrder: string;
 }
 
-const DEFAULT_SETTINGS: ProjectManagerSettings = {
-	projectsFolder: "projects",
+const DEFAULT_SETTINGS: BasesTimelineSettings = {
 	statusKey: "status",
 	priorityKey: "priority",
-	startKey: "start",
-	endKey: "end",
-	tagsKey: "tags",
-	defaultStatus: "inbox",
-	defaultPriority: "medium",
 	statusOrder: "inbox, not started, cooking, on hold, clean, archive",
 };
 
-export default class ProjectManagerPlugin extends Plugin {
-	settings: ProjectManagerSettings = DEFAULT_SETTINGS;
+export default class BasesTimelinePlugin extends Plugin {
+	settings: BasesTimelineSettings = DEFAULT_SETTINGS;
 
 	async onload(): Promise<void> {
 		await this.loadSettings();
@@ -47,12 +35,7 @@ export default class ProjectManagerPlugin extends Plugin {
 			new Notice(t("notice.registerFailed"));
 		}
 
-		this.addCommand({
-			id: "new-project",
-			name: t("command.newProject"),
-			callback: () => void this.createProject(),
-		});
-		this.addSettingTab(new ProjectManagerSettingTab(this.app, this));
+		this.addSettingTab(new BasesTimelineSettingTab(this.app, this));
 	}
 
 	statusOrderList(): string[] {
@@ -62,33 +45,8 @@ export default class ProjectManagerPlugin extends Plugin {
 			.filter(Boolean);
 	}
 
-	async createProject(): Promise<void> {
-		const s = this.settings;
-		const folder = normalizePath(s.projectsFolder || "projects");
-		if (!this.app.vault.getFolderByPath(folder)) {
-			await this.app.vault.createFolder(folder);
-		}
-		const base = t("command.newProject");
-		let path = normalizePath(`${folder}/${base}.md`);
-		let counter = 1;
-		while (this.app.vault.getAbstractFileByPath(path)) {
-			counter++;
-			path = normalizePath(`${folder}/${base} ${counter}.md`);
-		}
-		const file = await this.app.vault.create(path, "");
-		await this.app.fileManager.processFrontMatter(file, (fm: Record<string, unknown>) => {
-			fm[s.statusKey] = s.defaultStatus;
-			fm[s.priorityKey] = s.defaultPriority;
-			fm[s.tagsKey] = [];
-			fm[s.startKey] = null;
-			fm[s.endKey] = null;
-		});
-		const leaf = this.app.workspace.getLeaf(true);
-		await leaf.openFile(file);
-	}
-
 	async loadSettings(): Promise<void> {
-		const data = (await this.loadData()) as Partial<ProjectManagerSettings> | null;
+		const data = (await this.loadData()) as Partial<BasesTimelineSettings> | null;
 		this.settings = { ...DEFAULT_SETTINGS, ...data };
 	}
 
@@ -97,23 +55,22 @@ export default class ProjectManagerPlugin extends Plugin {
 	}
 }
 
-class ProjectManagerSettingTab extends PluginSettingTab {
-	plugin: ProjectManagerPlugin;
+class BasesTimelineSettingTab extends PluginSettingTab {
+	plugin: BasesTimelinePlugin;
 
-	constructor(app: App, plugin: ProjectManagerPlugin) {
+	constructor(app: App, plugin: BasesTimelinePlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
 
 	// Declarative definitions (Obsidian 1.13+): powers the settings search.
 	getSettingDefinitions(): SettingDefinitionItem[] {
-		const text = (name: string, desc: string, key: keyof ProjectManagerSettings) => ({
+		const text = (name: string, desc: string, key: keyof BasesTimelineSettings) => ({
 			name,
 			desc,
 			control: { type: "text" as const, key, defaultValue: DEFAULT_SETTINGS[key] },
 		});
 		return [
-			text(t("settings.folder"), t("settings.folderDesc"), "projectsFolder"),
 			text(t("settings.statusOrder"), t("settings.statusOrderDesc"), "statusOrder"),
 			{
 				type: "group",
@@ -121,28 +78,17 @@ class ProjectManagerSettingTab extends PluginSettingTab {
 				items: [
 					text(t("settings.statusKey"), t("settings.statusKeyDesc"), "statusKey"),
 					text(t("settings.priorityKey"), t("settings.priorityKeyDesc"), "priorityKey"),
-					text(t("settings.startKey"), t("settings.startKeyDesc"), "startKey"),
-					text(t("settings.endKey"), t("settings.endKeyDesc"), "endKey"),
-					text(t("settings.tagsKey"), t("settings.tagsKeyDesc"), "tagsKey"),
-				],
-			},
-			{
-				type: "group",
-				heading: t("settings.defaults"),
-				items: [
-					text(t("settings.defaultStatus"), t("settings.defaultStatusDesc"), "defaultStatus"),
-					text(t("settings.defaultPriority"), t("settings.defaultPriorityDesc"), "defaultPriority"),
 				],
 			},
 		];
 	}
 
 	getControlValue(key: string): unknown {
-		return this.plugin.settings[key as keyof ProjectManagerSettings];
+		return this.plugin.settings[key as keyof BasesTimelineSettings];
 	}
 
 	async setControlValue(key: string, value: unknown): Promise<void> {
-		const k = key as keyof ProjectManagerSettings;
+		const k = key as keyof BasesTimelineSettings;
 		this.plugin.settings[k] = (typeof value === "string" && value.trim()) || DEFAULT_SETTINGS[k];
 		await this.plugin.saveSettings();
 	}
@@ -151,7 +97,7 @@ class ProjectManagerSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		const text = (name: string, desc: string, key: keyof ProjectManagerSettings) => {
+		const text = (name: string, desc: string, key: keyof BasesTimelineSettings) => {
 			new Setting(containerEl)
 				.setName(name)
 				.setDesc(desc)
@@ -163,18 +109,10 @@ class ProjectManagerSettingTab extends PluginSettingTab {
 				);
 		};
 
-		text(t("settings.folder"), t("settings.folderDesc"), "projectsFolder");
 		text(t("settings.statusOrder"), t("settings.statusOrderDesc"), "statusOrder");
 
 		new Setting(containerEl).setName(t("settings.properties")).setHeading();
 		text(t("settings.statusKey"), t("settings.statusKeyDesc"), "statusKey");
 		text(t("settings.priorityKey"), t("settings.priorityKeyDesc"), "priorityKey");
-		text(t("settings.startKey"), t("settings.startKeyDesc"), "startKey");
-		text(t("settings.endKey"), t("settings.endKeyDesc"), "endKey");
-		text(t("settings.tagsKey"), t("settings.tagsKeyDesc"), "tagsKey");
-
-		new Setting(containerEl).setName(t("settings.defaults")).setHeading();
-		text(t("settings.defaultStatus"), t("settings.defaultStatusDesc"), "defaultStatus");
-		text(t("settings.defaultPriority"), t("settings.defaultPriorityDesc"), "defaultPriority");
 	}
 }

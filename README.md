@@ -46,7 +46,7 @@ Note: the Bases toolbar search matches against the view's visible properties (th
 2. Create a `.base` file (see `examples/Progetti.base`) or add a **Timeline** view to an existing Base.
 3. Filter the Base to your projects folder, e.g. `file.inFolder("projects")`.
 
-The plugin also adds a **New project** command that creates a note in the projects folder with the frontmatter already set. The folder, property names, default values, and the status order used for grouping are configurable in the plugin settings.
+In the plugin settings you can set the property names used when writing back a status or priority, and the status order used to sort the groups.
 
 The interface is available in English, Italian, French, German and Spanish, following the Obsidian language.
 
@@ -70,7 +70,7 @@ npm run dev     # build in watch mode
 
 ## Development
 
-- `src/main.ts` — view registration, "New project" command, settings.
+- `src/main.ts` — view registration and settings.
 - `src/timeline-view.ts` — the Timeline view (`BasesView`).
 - `src/i18n.ts` — UI translations (en, it, fr, de, es).
 - `styles.css` — styles (uses Obsidian CSS variables, works in light and dark themes).
