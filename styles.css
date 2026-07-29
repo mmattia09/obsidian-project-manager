@@ -634,6 +634,12 @@
 .ptl-handle.mod-left { left: 0; }
 .ptl-handle.mod-right { right: 0; }
 
+/* Touch: wider grab area, and keep the gesture from turning into a scroll. */
+.is-mobile .ptl-handle {
+	width: 14px;
+	touch-action: none;
+}
+
 .ptl-empty {
 	padding: 24px 16px;
 	color: var(--text-faint);

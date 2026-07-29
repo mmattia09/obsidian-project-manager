@@ -334,6 +334,21 @@ export class TimelineView extends BasesView implements HoverParent {
 			this.pinchDistance = null;
 		});
 
+		// Rotating a tablet or resizing the pane can cross the narrow
+		// threshold, which changes whether both panels fit.
+		if (typeof ResizeObserver !== "undefined") {
+			let wasNarrow = this.isNarrow();
+			const observer = new ResizeObserver(() => {
+				const narrow = this.isNarrow();
+				if (narrow !== wasNarrow) {
+					wasNarrow = narrow;
+					this.render();
+				}
+			});
+			observer.observe(this.rootEl);
+			this.register(() => observer.disconnect());
+		}
+
 		this.registerDomEvent(this.scrollerEl, "scroll", () => {
 			this.scheduleArrowUpdate();
 			if (this.drag) return;
@@ -380,6 +395,18 @@ export class TimelineView extends BasesView implements HoverParent {
 
 	private sidebarVisible(): boolean {
 		return (this.config.get("sidebar") as boolean) ?? true;
+	}
+
+	/**
+	 * Too narrow to show the side panel and the timeline at once: phones,
+	 * and any pane squeezed below the width of the panel plus a usable
+	 * timeline (a split view on a tablet, a narrow sidebar on desktop).
+	 * Tablets in full width keep both.
+	 */
+	private isNarrow(): boolean {
+		if (Platform.isPhone) return true;
+		const width = this.rootEl.clientWidth;
+		return width > 0 && width < 500;
 	}
 
 	private toggleSidebar(): void {
@@ -543,6 +570,7 @@ export class TimelineView extends BasesView implements HoverParent {
 		const signature = JSON.stringify([
 			this.zoomKey,
 			this.sidebarVisible(),
+			this.isNarrow(),
 			[...collapsed].sort(),
 			today,
 			this.startPid,
@@ -559,7 +587,7 @@ export class TimelineView extends BasesView implements HoverParent {
 
 		const sidebarVisible = this.sidebarVisible();
 		this.rootEl.toggleClass("is-sidebar-hidden", !sidebarVisible);
-		this.rootEl.toggleClass("is-list-only", Platform.isMobile && sidebarVisible);
+		this.rootEl.toggleClass("is-list-only", sidebarVisible && this.isNarrow());
 		this.rootEl.toggleClass("is-mobile", Platform.isMobile);
 
 		let minDay = today;
