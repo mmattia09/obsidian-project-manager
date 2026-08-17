@@ -156,12 +156,23 @@
 	box-sizing: border-box;
 }
 
-.ptl-side-group:first-child {
+/* Only the very first group has no separator above it: every header is
+   the first child of its own group wrapper. */
+.ptl-side-group-wrap:first-child .ptl-side-group {
 	border-top: none;
 }
 
 .ptl-side-group:hover {
 	background: var(--background-modifier-hover);
+}
+
+/* Label and count share a baseline: centring them separately makes the
+   smaller count look off next to the label. */
+.ptl-side-group-text {
+	display: flex;
+	align-items: baseline;
+	gap: 6px;
+	min-width: 0;
 }
 
 .ptl-side-group-label {
@@ -499,9 +510,14 @@
 	cursor: pointer;
 }
 
-.ptl-side-group.is-drop-target {
+.ptl-side-group-wrap.is-drop-target {
 	background: var(--background-modifier-hover);
 	box-shadow: inset 0 0 0 1px var(--background-modifier-border-focus);
+}
+
+/* While dragging a project, keep the list from feeling like a text selection. */
+.is-dragging-row .ptl-side-row {
+	cursor: grabbing;
 }
 
 .ptl-pill.mod-urgent { background: rgba(var(--color-red-rgb), 0.18); color: var(--color-red); }

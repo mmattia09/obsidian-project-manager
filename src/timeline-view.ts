@@ -630,15 +630,20 @@ export class TimelineView extends BasesView implements HoverParent {
 		for (const g of groups) {
 			const label = g.label ?? "—";
 			const isCollapsed = collapsed.has(label);
+			// The whole group is a drop target, so a project can be moved by
+			// dropping it on any of its rows instead of only on the header.
+			const groupEl = this.sidebarBodyEl.createDiv("ptl-side-group-wrap");
+			if (g.label !== null) this.setupStatusDrop(groupEl, g.label);
+
 			if (showGroups) {
 				// Sidebar group header: chevron + label + count.
-				const sideGroup = this.sidebarBodyEl.createDiv("ptl-side-group");
+				const sideGroup = groupEl.createDiv("ptl-side-group");
 				const chevron = sideGroup.createSpan("ptl-chevron");
 				setIcon(chevron, isCollapsed ? "lucide-chevron-right" : "lucide-chevron-down");
-				sideGroup.createSpan({ cls: "ptl-side-group-label", text: label });
-				sideGroup.createSpan({ cls: "ptl-side-group-count", text: String(g.items.length) });
+				const groupText = sideGroup.createDiv("ptl-side-group-text");
+				groupText.createSpan({ cls: "ptl-side-group-label", text: label });
+				groupText.createSpan({ cls: "ptl-side-group-count", text: String(g.items.length) });
 				this.registerDomEvent(sideGroup, "click", () => this.toggleGroup(label));
-				if (g.label !== null) this.setupStatusDrop(sideGroup, g.label);
 
 				// Matching spacer row in the timeline; carries the label when the sidebar is hidden.
 				const gh = body.createDiv("ptl-group-row");
@@ -656,7 +661,7 @@ export class TimelineView extends BasesView implements HoverParent {
 				// drop the unscheduled spacer rows entirely.
 				if (!item.scheduled && !sidebarVisible) continue;
 				anyRow = true;
-				this.renderSideRow(item);
+				this.renderSideRow(groupEl, item, g.label);
 				this.renderRow(body, item);
 			}
 		}
@@ -792,25 +797,80 @@ export class TimelineView extends BasesView implements HoverParent {
 		return !!leaf && !!(leaf as unknown as { parent?: unknown }).parent;
 	}
 
-	// Dragging a sidebar row onto another group header moves the project
-	// to that status.
+	// Dragging a sidebar row anywhere onto another group moves the project
+	// to that group's value.
 	private draggingItem: TimelineItem | null = null;
+	private draggingFrom: string | null = null;
+	private autoScrollTimer = 0;
+	private autoScrollSpeed = 0;
 
-	private setupStatusDrop(groupEl: HTMLElement, status: string): void {
+	/**
+	 * Property written when a project is dropped on a group, or created from
+	 * a group's "new" row: the one the base groups by, falling back to the
+	 * status property from the settings.
+	 */
+	private groupProperty(): string {
+		const groupBy = this.config.get("groupBy");
+		if (groupBy && typeof groupBy === "object") {
+			const property = (groupBy as { property?: unknown }).property;
+			if (typeof property === "string" && property) {
+				return property.replace(/^note\./, "");
+			}
+		}
+		return this.deps.getStatusKey();
+	}
+
+	private setupStatusDrop(groupEl: HTMLElement, value: string): void {
 		this.registerDomEvent(groupEl, "dragover", (e) => {
 			if (!this.draggingItem) return;
 			e.preventDefault();
-			groupEl.addClass("is-drop-target");
+			groupEl.toggleClass("is-drop-target", this.draggingFrom !== value);
 		});
-		this.registerDomEvent(groupEl, "dragleave", () => groupEl.removeClass("is-drop-target"));
+		this.registerDomEvent(groupEl, "dragleave", (e) => {
+			// dragleave also fires when moving onto a child element.
+			if (groupEl.contains(e.relatedTarget as Node | null)) return;
+			groupEl.removeClass("is-drop-target");
+		});
 		this.registerDomEvent(groupEl, "drop", (e) => {
 			groupEl.removeClass("is-drop-target");
 			const item = this.draggingItem;
-			this.draggingItem = null;
+			const from = this.draggingFrom;
+			this.endDrag();
 			if (!item) return;
 			e.preventDefault();
-			void this.setFrontmatterValue(item.file, this.deps.getStatusKey(), status);
+			if (from === value) return;
+			void this.setFrontmatterValue(item.file, this.groupProperty(), value);
 		});
+	}
+
+	/**
+	 * Scrolls the list while a project is held near its top or bottom edge,
+	 * so a distant group can be reached without letting go.
+	 */
+	private updateAutoScroll(clientY: number): void {
+		const rect = this.sidebarBodyEl.getBoundingClientRect();
+		const zone = 56;
+		let speed = 0;
+		if (clientY < rect.top + zone) speed = -Math.ceil((rect.top + zone - clientY) / 4);
+		else if (clientY > rect.bottom - zone) speed = Math.ceil((clientY - rect.bottom + zone) / 4);
+		speed = Math.max(-16, Math.min(16, speed));
+		if (speed === this.autoScrollSpeed) return;
+		this.autoScrollSpeed = speed;
+		window.clearInterval(this.autoScrollTimer);
+		this.autoScrollTimer = 0;
+		if (speed === 0) return;
+		this.autoScrollTimer = window.setInterval(() => {
+			this.sidebarBodyEl.scrollTop += this.autoScrollSpeed;
+		}, 16);
+	}
+
+	private endDrag(): void {
+		this.draggingItem = null;
+		this.draggingFrom = null;
+		this.rootEl.removeClass("is-dragging-row");
+		window.clearInterval(this.autoScrollTimer);
+		this.autoScrollTimer = 0;
+		this.autoScrollSpeed = 0;
 	}
 
 	private async setFrontmatterValue(file: TFile, key: string, value: string): Promise<void> {
@@ -884,19 +944,23 @@ export class TimelineView extends BasesView implements HoverParent {
 		if (!span.hasChildNodes() && !span.textContent) span.remove();
 	}
 
-	private renderSideRow(item: TimelineItem): void {
-		const row = this.sidebarBodyEl.createDiv("ptl-side-row");
+	private renderSideRow(host: HTMLElement, item: TimelineItem, group: string | null): void {
+		const row = host.createDiv("ptl-side-row");
 		this.renderFileIcon(row, item.file.path);
 		row.createSpan({ cls: "ptl-side-title", text: item.title });
 		this.registerDomEvent(row, "click", (e) => this.openFile(e, item.file));
 		row.draggable = true;
 		this.registerDomEvent(row, "dragstart", (e) => {
 			this.draggingItem = item;
+			this.draggingFrom = group;
+			this.rootEl.addClass("is-dragging-row");
 			e.dataTransfer?.setData("text/plain", item.file.path);
 		});
-		this.registerDomEvent(row, "dragend", () => {
-			this.draggingItem = null;
+		this.registerDomEvent(row, "drag", (e) => {
+			// clientY is 0 on the last drag event of a gesture.
+			if (e.clientY) this.updateAutoScroll(e.clientY);
 		});
+		this.registerDomEvent(row, "dragend", () => this.endDrag());
 		this.registerDomEvent(row, "mouseover", (e) => {
 			this.app.workspace.trigger("hover-link", {
 				event: e,
