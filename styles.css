@@ -466,7 +466,9 @@
 	background: var(--background-secondary-alt);
 	border: 1px solid var(--background-modifier-border-hover);
 	box-shadow: var(--shadow-s);
-	cursor: grab;
+	/* The bar opens the note on click, so it advertises itself as clickable;
+	   it only turns into a grabbing hand once a drag actually starts. */
+	cursor: pointer;
 	box-sizing: border-box;
 }
 
@@ -477,6 +479,14 @@
 .is-dragging .ptl-bar,
 .is-dragging {
 	cursor: grabbing;
+}
+
+/* Resizing from an edge keeps the resize cursor, so the gesture the user
+   started is the one the pointer keeps showing. */
+.is-resizing,
+.is-resizing .ptl-bar,
+.is-resizing .ptl-handle {
+	cursor: col-resize;
 }
 
 .ptl-label {
@@ -642,13 +652,15 @@
 	position: absolute;
 	top: 0;
 	bottom: 0;
-	width: 7px;
+	width: 8px;
 	cursor: col-resize;
 	z-index: 2;
 }
 
-.ptl-handle.mod-left { left: 0; }
-.ptl-handle.mod-right { right: 0; }
+/* Offsets are measured from the padding box, so without the -1px the bar's
+   own 1px border keeps the move cursor on the very edge of the resize zone. */
+.ptl-handle.mod-left { left: -1px; }
+.ptl-handle.mod-right { right: -1px; }
 
 /* Touch: wider grab area, and keep the gesture from turning into a scroll. */
 .is-mobile .ptl-handle {
