@@ -27,6 +27,8 @@ export interface TimelineViewDeps {
 export const TIMELINE_VIEW_TYPE = "project-timeline";
 
 const DAY_MS = 86400000;
+// Pointer travel, in any direction, before a press reads as a drag.
+const DRAG_CURSOR_THRESHOLD_PX = 5;
 
 type PriorityLevel = "urgent" | "high" | "medium" | "low" | "none";
 
@@ -123,11 +125,13 @@ interface DragState {
 	mode: "move" | "resize-left" | "resize-right";
 	pointerId: number;
 	x0: number;
+	y0: number;
 	s0: number;
 	e0: number;
 	newStart: number;
 	newEnd: number;
 	moved: boolean;
+	pointerMoved: boolean;
 }
 
 function dayIndexFromISO(iso: string): number | null {
@@ -1200,12 +1204,15 @@ export class TimelineView extends BasesView implements HoverParent {
 			mode,
 			pointerId: e.pointerId,
 			x0: e.clientX,
+			y0: e.clientY,
 			s0,
 			e0,
 			newStart: s0,
 			newEnd: e0,
 			moved: false,
+			pointerMoved: false,
 		};
+		if (mode !== "move") this.rootEl.addClass("is-resizing");
 		try {
 			bar.setPointerCapture(e.pointerId);
 		} catch {
@@ -1216,8 +1223,14 @@ export class TimelineView extends BasesView implements HoverParent {
 	private onBarPointerMove = (e: PointerEvent): void => {
 		const d = this.drag;
 		if (!d || e.pointerId !== d.pointerId) return;
-		const deltaDays = Math.round((e.clientX - d.x0) / this.pxPerDay);
+		const dx = e.clientX - d.x0;
+		const dy = e.clientY - d.y0;
+		const deltaDays = Math.round(dx / this.pxPerDay);
 		if (deltaDays !== 0) d.moved = true;
+		// The cursor must react to the gesture, not to the day the bar snaps to:
+		// with a wide zoom a drag can stay on the same day for a long time.
+		// Distance is measured in any direction, so a vertical drag counts too.
+		if (Math.hypot(dx, dy) >= DRAG_CURSOR_THRESHOLD_PX) d.pointerMoved = true;
 		if (d.mode === "move") {
 			d.newStart = d.s0 + deltaDays;
 			d.newEnd = d.e0 + deltaDays;
@@ -1232,7 +1245,10 @@ export class TimelineView extends BasesView implements HoverParent {
 		const barWidth = Math.max((d.newEnd - d.newStart + 1) * this.pxPerDay - 2, 8);
 		d.barEl.style.left = `${barLeft + 1}px`;
 		d.barEl.style.width = `${barWidth}px`;
-		this.rootEl.toggleClass("is-dragging", d.moved);
+		// Moving and resizing are different gestures, so they keep different
+		// cursors for the whole duration of the drag. `is-resizing` is set on
+		// pointerdown, since a resize is known before any movement happens.
+		this.rootEl.toggleClass("is-dragging", d.pointerMoved && d.mode === "move");
 		if (d.moved) {
 			// Keep the static labels pinned to the moving bar edges.
 			if (d.startLabelEl) {
@@ -1282,10 +1298,16 @@ export class TimelineView extends BasesView implements HoverParent {
 		}
 		this.drag = null;
 		this.rootEl.removeClass("is-dragging");
+		this.rootEl.removeClass("is-resizing");
 		d.startLabelEl?.removeClass("mod-active");
 		d.endLabelEl?.removeClass("mod-active");
-		if (d.moved) {
+		// Swallow the click when the gesture was not a plain click on the bar:
+		// either the pointer travelled far enough to read as a drag, or it
+		// started on an edge handle, which only ever resizes.
+		if (d.pointerMoved || d.mode !== "move") {
 			d.barEl.addClass("mod-dragged");
+		}
+		if (d.moved) {
 			void this.applyDates(d);
 		}
 		if (this.pendingUpdate) {
